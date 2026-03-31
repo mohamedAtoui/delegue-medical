@@ -1,26 +1,36 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Search, Plus } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DoctorCard } from "@/components/doctors/doctor-card";
 import { WilayaSelect } from "@/components/shared/wilaya-select";
+import { SPECIALTIES } from "@/lib/constants/specialties";
 import type { Doctor } from "@/types";
 
 export default function MedecinsPage() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [search, setSearch] = useState("");
   const [wilaya, setWilaya] = useState("");
+  const [specialty, setSpecialty] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const fetchDoctors = async () => {
+  const fetchDoctors = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (wilaya) params.set("wilaya", wilaya);
+      if (specialty) params.set("specialty", specialty);
 
       const res = await fetch(`/api/doctors?${params}`);
       const data = await res.json();
@@ -28,12 +38,12 @@ export default function MedecinsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, wilaya, specialty]);
 
   useEffect(() => {
     const timeout = setTimeout(fetchDoctors, 300);
     return () => clearTimeout(timeout);
-  }, [search, wilaya]);
+  }, [fetchDoctors]);
 
   return (
     <div className="space-y-6">
@@ -42,11 +52,11 @@ export default function MedecinsPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Médecins</h1>
           <p className="text-sm text-muted-foreground">
-            Répertoire des médecins
+            Répertoire des médecins et pharmaciens
           </p>
         </div>
         <Link href="/medecins/nouveau">
-          <Button>
+          <Button className="cursor-pointer">
             <Plus className="mr-2 h-4 w-4" />
             Ajouter
           </Button>
@@ -64,7 +74,22 @@ export default function MedecinsPage() {
             className="pl-9"
           />
         </div>
-        <div className="w-full sm:w-64">
+        <div className="w-full sm:w-48">
+          <Select value={specialty} onValueChange={(v) => setSpecialty(v ?? "")}>
+            <SelectTrigger>
+              <SelectValue placeholder="Spécialité" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes</SelectItem>
+              {SPECIALTIES.map((spec) => (
+                <SelectItem key={spec} value={spec}>
+                  {spec}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="w-full sm:w-48">
           <WilayaSelect
             value={wilaya}
             onValueChange={setWilaya}

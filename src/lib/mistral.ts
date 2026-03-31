@@ -3,7 +3,7 @@ const MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions";
 export async function summarizeVisitNotes(notes: string[]): Promise<string> {
   const apiKey = process.env.MISTRAL_API_KEY;
   if (!apiKey) {
-    throw new Error("MISTRAL_API_KEY non configure");
+    throw new Error("MISTRAL_API_KEY non configuré");
   }
 
   const response = await fetch(MISTRAL_API_URL, {
@@ -17,18 +17,32 @@ export async function summarizeVisitNotes(notes: string[]): Promise<string> {
       messages: [
         {
           role: "system",
-          content: `Tu es un assistant pour une entreprise pharmaceutique algerienne appelee Handson. Analyse les notes de visites medicales suivantes et fournis:
+          content: `Tu es un assistant pour une entreprise pharmaceutique algérienne appelée Handson. Analyse les notes de visites médicales suivantes.
 
-1. Un resume concis des points cles
-2. Les tendances observees (retours frequents des medecins)
-3. Les remarques importantes sur les produits
-4. Les points d'action recommandes
+RÈGLES DE FORMAT IMPORTANTES:
+- Réponds en texte brut uniquement, PAS de markdown
+- N'utilise PAS de caractères comme **, ##, -, *, etc.
+- Utilise des numéros (1. 2. 3.) pour les listes
+- Sépare les sections par des lignes vides
+- Sois concis et professionnel
 
-Reponds en francais de maniere professionnelle et structuree.`,
+Structure ta réponse ainsi:
+
+POINTS CLÉS
+(résumé des observations principales)
+
+TENDANCES
+(retours fréquents des médecins)
+
+REMARQUES SUR LES PRODUITS
+(feedback spécifique aux produits)
+
+ACTIONS RECOMMANDÉES
+(ce que les délégués devraient faire)`,
         },
         {
           role: "user",
-          content: `Voici les notes de visites a resumer:\n\n${notes
+          content: `Voici les notes de visites à résumer:\n\n${notes
             .map((n, i) => `${i + 1}. ${n}`)
             .join("\n")}`,
         },

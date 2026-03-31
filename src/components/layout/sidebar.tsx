@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { UserButton } from "@clerk/nextjs";
+import { useClerk, UserButton } from "@clerk/nextjs";
 import {
   ClipboardList,
   Stethoscope,
   LayoutDashboard,
   MapPin,
+  Users,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
@@ -15,10 +17,12 @@ const allNavItems = [
   { href: "/visites", label: "Visites", icon: ClipboardList, roles: ["delegue", "superviseur"] },
   { href: "/medecins", label: "Médecins", icon: Stethoscope, roles: ["delegue", "superviseur"] },
   { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard, roles: ["superviseur"] },
+  { href: "/delegues", label: "Délégués", icon: Users, roles: ["superviseur"] },
   { href: "/territoires", label: "Territoires", icon: MapPin, roles: ["superviseur"] },
 ];
 
 export function Sidebar({ currentPath, role }: { currentPath: string; role: UserRole }) {
+  const { signOut } = useClerk();
   const navItems = allNavItems.filter((item) => item.roles.includes(role));
 
   return (
@@ -57,7 +61,7 @@ export function Sidebar({ currentPath, role }: { currentPath: string; role: User
       </nav>
 
       {/* User section */}
-      <div className="border-t border-border p-4">
+      <div className="border-t border-border p-4 space-y-3">
         <div className="flex items-center gap-3">
           <UserButton
             appearance={{
@@ -66,6 +70,13 @@ export function Sidebar({ currentPath, role }: { currentPath: string; role: User
           />
           <span className="text-sm text-sidebar-foreground">Mon compte</span>
         </div>
+        <button
+          onClick={() => signOut({ redirectUrl: "/sign-in" })}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
+        >
+          <LogOut className="h-4 w-4" />
+          Se déconnecter
+        </button>
       </div>
     </aside>
   );

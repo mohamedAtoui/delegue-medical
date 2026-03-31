@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -14,22 +14,50 @@ import {
 import { WilayaSelect } from "@/components/shared/wilaya-select";
 import { SPECIALTIES } from "@/lib/constants/specialties";
 import { toast } from "sonner";
+import { Star } from "lucide-react";
 import type { Doctor } from "@/types";
 
 interface DoctorFormProps {
   onSuccess: (doctor: Doctor) => void;
   onCancel?: () => void;
+  initialData?: Doctor | null;
 }
 
-export function DoctorForm({ onSuccess, onCancel }: DoctorFormProps) {
+export function DoctorForm({ onSuccess, onCancel, initialData }: DoctorFormProps) {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
+    doctor_type: "medecin",
     specialty: "",
+    address: "",
+    latitude: "",
+    longitude: "",
     wilaya: "",
     phone: "",
+    potentiel: "",
+    engagement: 0,
   });
+
+  useEffect(() => {
+    if (initialData) {
+      setForm({
+        first_name: initialData.first_name || "",
+        last_name: initialData.last_name || "",
+        doctor_type: initialData.doctor_type || "medecin",
+        specialty: initialData.specialty || "",
+        address: initialData.address || "",
+        latitude: initialData.latitude?.toString() || "",
+        longitude: initialData.longitude?.toString() || "",
+        wilaya: initialData.wilaya || "",
+        phone: initialData.phone || "",
+        potentiel: initialData.potentiel || "",
+        engagement: initialData.engagement || 0,
+      });
+    }
+  }, [initialData]);
+
+  const isEdit = !!initialData;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,10 +69,21 @@ export function DoctorForm({ onSuccess, onCancel }: DoctorFormProps) {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/doctors", {
-        method: "POST",
+      const url = isEdit ? `/api/doctors/${initialData.id}` : "/api/doctors";
+      const method = isEdit ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          latitude: form.latitude ? parseFloat(form.latitude) : null,
+          longitude: form.longitude ? parseFloat(form.longitude) : null,
+          potentiel: form.potentiel || null,
+          specialty: form.specialty || null,
+          phone: form.phone || null,
+          address: form.address || null,
+        }),
       });
 
       if (!res.ok) {
@@ -53,10 +92,10 @@ export function DoctorForm({ onSuccess, onCancel }: DoctorFormProps) {
       }
 
       const doctor = await res.json();
-      toast.success("Médecin ajouté avec succès");
+      toast.success(isEdit ? "Médecin modifié avec succès" : "Médecin ajouté avec succès");
       onSuccess(doctor);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erreur lors de l'ajout");
+      toast.error(err instanceof Error ? err.message : "Erreur lors de l'opération");
     } finally {
       setLoading(false);
     }
@@ -66,42 +105,59 @@ export function DoctorForm({ onSuccess, onCancel }: DoctorFormProps) {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="first_name">Prénom *</Label>
-          <Input
-            id="first_name"
-            value={form.first_name}
-            onChange={(e) => setForm({ ...form, first_name: e.target.value })}
-            placeholder="Prénom du médecin"
-          />
-        </div>
-        <div className="space-y-2">
           <Label htmlFor="last_name">Nom *</Label>
           <Input
             id="last_name"
             value={form.last_name}
             onChange={(e) => setForm({ ...form, last_name: e.target.value })}
-            placeholder="Nom du médecin"
+            placeholder="Nom"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="first_name">Prénom *</Label>
+          <Input
+            id="first_name"
+            value={form.first_name}
+            onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+            placeholder="Prénom"
           />
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label>Spécialité</Label>
-        <Select
-          value={form.specialty}
-          onValueChange={(v) => setForm({ ...form, specialty: v ?? "" })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Sélectionner une spécialité" />
-          </SelectTrigger>
-          <SelectContent>
-            {SPECIALTIES.map((spec) => (
-              <SelectItem key={spec} value={spec}>
-                {spec}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Type *</Label>
+          <Select
+            value={form.doctor_type}
+            onValueChange={(v) => setForm({ ...form, doctor_type: v ?? "medecin" })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="medecin">Médecin</SelectItem>
+              <SelectItem value="pharmacien">Pharmacien</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Spécialité</Label>
+          <Select
+            value={form.specialty}
+            onValueChange={(v) => setForm({ ...form, specialty: v ?? "" })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Sélectionner" />
+            </SelectTrigger>
+            <SelectContent>
+              {SPECIALTIES.map((spec) => (
+                <SelectItem key={spec} value={spec}>
+                  {spec}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -110,6 +166,41 @@ export function DoctorForm({ onSuccess, onCancel }: DoctorFormProps) {
           value={form.wilaya}
           onValueChange={(v) => setForm({ ...form, wilaya: v })}
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="address">Adresse</Label>
+        <Input
+          id="address"
+          value={form.address}
+          onChange={(e) => setForm({ ...form, address: e.target.value })}
+          placeholder="Adresse du cabinet"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="latitude">Latitude (GPS)</Label>
+          <Input
+            id="latitude"
+            value={form.latitude}
+            onChange={(e) => setForm({ ...form, latitude: e.target.value })}
+            placeholder="ex: 36.7538"
+            type="number"
+            step="any"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="longitude">Longitude (GPS)</Label>
+          <Input
+            id="longitude"
+            value={form.longitude}
+            onChange={(e) => setForm({ ...form, longitude: e.target.value })}
+            placeholder="ex: 3.0588"
+            type="number"
+            step="any"
+          />
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -122,6 +213,46 @@ export function DoctorForm({ onSuccess, onCancel }: DoctorFormProps) {
         />
       </div>
 
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Potentiel</Label>
+          <Select
+            value={form.potentiel}
+            onValueChange={(v) => setForm({ ...form, potentiel: v ?? "" })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Sélectionner" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="A">A - Fort</SelectItem>
+              <SelectItem value="B">B - Moyen</SelectItem>
+              <SelectItem value="C">C - Faible</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Engagement avec le labo</Label>
+          <div className="flex items-center gap-1 pt-1">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                type="button"
+                onClick={() => setForm({ ...form, engagement: star })}
+                className="cursor-pointer"
+              >
+                <Star
+                  className={`h-6 w-6 transition-colors ${
+                    star <= form.engagement
+                      ? "fill-yellow-400 text-yellow-400"
+                      : "text-muted-foreground/30"
+                  }`}
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div className="flex gap-2 justify-end pt-2">
         {onCancel && (
           <Button type="button" variant="outline" onClick={onCancel}>
@@ -129,7 +260,7 @@ export function DoctorForm({ onSuccess, onCancel }: DoctorFormProps) {
           </Button>
         )}
         <Button type="submit" disabled={loading}>
-          {loading ? "Ajout en cours..." : "Ajouter le médecin"}
+          {loading ? "En cours..." : isEdit ? "Modifier" : "Ajouter le médecin"}
         </Button>
       </div>
     </form>

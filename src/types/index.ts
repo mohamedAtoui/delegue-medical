@@ -1,4 +1,6 @@
 export type UserRole = "delegue" | "superviseur";
+export type DoctorType = "medecin" | "pharmacien";
+export type Potentiel = "A" | "B" | "C";
 
 export interface User {
   id: string;
@@ -23,12 +25,19 @@ export interface Doctor {
   id: string;
   first_name: string;
   last_name: string;
+  doctor_type: DoctorType;
   specialty: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
   wilaya: string;
   phone: string | null;
+  potentiel: Potentiel | null;
+  engagement: number | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  last_visited_at?: string | null;
 }
 
 export interface Visit {

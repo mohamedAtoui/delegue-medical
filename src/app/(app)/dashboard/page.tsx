@@ -6,6 +6,8 @@ import { Charts } from "@/components/dashboard/charts";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { AISummaryPanel } from "@/components/dashboard/ai-summary-panel";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Download } from "lucide-react";
 
 interface Stats {
   totalVisits: number;
@@ -55,13 +57,26 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <Tabs value={period} onValueChange={setPeriod}>
-          <TabsList>
-            <TabsTrigger value="today">Aujourd&apos;hui</TabsTrigger>
-            <TabsTrigger value="week">Semaine</TabsTrigger>
-            <TabsTrigger value="month">Mois</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center gap-3">
+          <Tabs value={period} onValueChange={setPeriod}>
+            <TabsList>
+              <TabsTrigger value="today">Aujourd&apos;hui</TabsTrigger>
+              <TabsTrigger value="week">Semaine</TabsTrigger>
+              <TabsTrigger value="month">Mois</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={() => {
+              window.open("/api/export", "_blank");
+            }}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Exporter Excel
+          </Button>
+        </div>
       </div>
 
       {/* KPIs */}
