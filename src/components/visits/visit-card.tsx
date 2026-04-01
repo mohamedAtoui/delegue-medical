@@ -22,6 +22,7 @@ interface DoctorVisitGroupProps {
   wilaya: string;
   visits: VisitWithDetails[];
   showUser?: boolean;
+  highlightUserId?: string;
 }
 
 export function DoctorVisitGroup({
@@ -30,6 +31,7 @@ export function DoctorVisitGroup({
   wilaya,
   visits,
   showUser = false,
+  highlightUserId,
 }: DoctorVisitGroupProps) {
   const [expanded, setExpanded] = useState(false);
   const lastVisit = visits[0];
@@ -96,39 +98,50 @@ export function DoctorVisitGroup({
                     <div className="absolute left-[9px] top-6 bottom-0 w-px bg-border" />
                   )}
                   {/* Timeline dot */}
-                  <div className="absolute left-0 top-1.5 h-[18px] w-[18px] rounded-full border-2 border-primary bg-background flex items-center justify-center">
-                    <div className="h-2 w-2 rounded-full bg-primary" />
-                  </div>
+                  {(() => {
+                    const isHighlighted = !highlightUserId || visit.user_id === highlightUserId;
+                    const dotColor = isHighlighted ? "border-primary" : "border-muted-foreground/30";
+                    const dotInner = isHighlighted ? "bg-primary" : "bg-muted-foreground/30";
+                    const noteBg = isHighlighted ? "bg-green-50 border border-green-200" : "bg-muted/20";
+                    const nameColor = isHighlighted ? "text-green-700 font-semibold" : "text-muted-foreground";
 
-                  {/* Visit content */}
-                  <div className="pb-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        {visit.user && (
-                          <span className="flex items-center gap-1 font-medium text-foreground/70">
-                            <User className="h-3 w-3" />
-                            {visit.user.first_name} {visit.user.last_name}
-                          </span>
-                        )}
-                        <span>
-                          {format(new Date(visit.created_at), "d MMM yyyy à HH:mm", { locale: fr })}
-                        </span>
-                      </div>
-                      <Badge variant="outline" className="text-xs">
-                        {visit.product?.name}
-                      </Badge>
-                    </div>
+                    return (
+                      <>
+                        <div className={`absolute left-0 top-1.5 h-[18px] w-[18px] rounded-full border-2 ${dotColor} bg-background flex items-center justify-center`}>
+                          <div className={`h-2 w-2 rounded-full ${dotInner}`} />
+                        </div>
 
-                    {visit.notes ? (
-                      <p className="text-sm text-foreground/90 leading-relaxed bg-muted/30 rounded-lg p-3">
-                        {visit.notes}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground italic">
-                        Visite sans commentaire
-                      </p>
-                    )}
-                  </div>
+                        <div className="pb-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              {visit.user && (
+                                <span className={`flex items-center gap-1 ${nameColor}`}>
+                                  <User className="h-3 w-3" />
+                                  {visit.user.first_name} {visit.user.last_name}
+                                </span>
+                              )}
+                              <span>
+                                {format(new Date(visit.created_at), "d MMM yyyy à HH:mm", { locale: fr })}
+                              </span>
+                            </div>
+                            <Badge variant="outline" className="text-xs">
+                              {visit.product?.name}
+                            </Badge>
+                          </div>
+
+                          {visit.notes ? (
+                            <p className={`text-sm leading-relaxed rounded-lg p-3 ${noteBg} ${isHighlighted ? "text-green-900" : "text-muted-foreground"}`}>
+                              {visit.notes}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground italic">
+                              Visite sans commentaire
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               ))}
             </div>

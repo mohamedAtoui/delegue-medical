@@ -345,6 +345,7 @@ export default function DeleguesPage() {
                       wilaya={group.wilaya}
                       visits={group.visits}
                       showUser
+                      highlightUserId={selectedRep?.id}
                     />
                   ))}
                 </div>
