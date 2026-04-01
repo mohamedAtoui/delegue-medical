@@ -31,8 +31,6 @@ export function DoctorForm({ onSuccess, onCancel, initialData }: DoctorFormProps
     doctor_type: "medecin",
     specialty: "",
     address: "",
-    latitude: "",
-    longitude: "",
     wilaya: "",
     phone: "",
     potentiel: "",
@@ -47,8 +45,6 @@ export function DoctorForm({ onSuccess, onCancel, initialData }: DoctorFormProps
         doctor_type: initialData.doctor_type || "medecin",
         specialty: initialData.specialty || "",
         address: initialData.address || "",
-        latitude: initialData.latitude?.toString() || "",
-        longitude: initialData.longitude?.toString() || "",
         wilaya: initialData.wilaya || "",
         phone: initialData.phone || "",
         potentiel: initialData.potentiel || "",
@@ -77,8 +73,6 @@ export function DoctorForm({ onSuccess, onCancel, initialData }: DoctorFormProps
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
-          latitude: form.latitude ? parseFloat(form.latitude) : null,
-          longitude: form.longitude ? parseFloat(form.longitude) : null,
           potentiel: form.potentiel || null,
           specialty: form.specialty || null,
           phone: form.phone || null,
@@ -169,38 +163,13 @@ export function DoctorForm({ onSuccess, onCancel, initialData }: DoctorFormProps
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="address">Adresse</Label>
+        <Label htmlFor="address">Adresse cabinet</Label>
         <Input
           id="address"
           value={form.address}
           onChange={(e) => setForm({ ...form, address: e.target.value })}
           placeholder="Adresse du cabinet"
         />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="latitude">Latitude (GPS)</Label>
-          <Input
-            id="latitude"
-            value={form.latitude}
-            onChange={(e) => setForm({ ...form, latitude: e.target.value })}
-            placeholder="ex: 36.7538"
-            type="number"
-            step="any"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="longitude">Longitude (GPS)</Label>
-          <Input
-            id="longitude"
-            value={form.longitude}
-            onChange={(e) => setForm({ ...form, longitude: e.target.value })}
-            placeholder="ex: 3.0588"
-            type="number"
-            step="any"
-          />
-        </div>
       </div>
 
       <div className="space-y-2">
