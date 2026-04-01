@@ -61,9 +61,31 @@ export default function DeleguesPage() {
   const fetchVisits = useCallback(async (userId: string) => {
     setLoadingVisits(true);
     try {
-      const res = await fetch(`/api/visits?user_id=${userId}&all=true&limit=200`);
-      const data = await res.json();
-      setVisits(data.data || []);
+      // First get this rep's visits only
+      const repRes = await fetch(`/api/visits?user_id=${userId}&limit=200`);
+      const repData = await repRes.json();
+      const repVisits: VisitWithDetails[] = repData.data || [];
+
+      // Get unique doctor IDs this rep visited
+      const doctorIds = [...new Set(repVisits.map((v) => v.doctor_id))];
+
+      // Fetch ALL visits for those doctors (to show other reps' comments too)
+      if (doctorIds.length > 0) {
+        const allPromises = doctorIds.map((id) =>
+          fetch(`/api/visits?doctor_id=${id}&all=true&limit=50`).then((r) => r.json())
+        );
+        const allResults = await Promise.all(allPromises);
+        const allVisits: VisitWithDetails[] = allResults.flatMap((r) => r.data || []);
+
+        // Deduplicate by visit ID
+        const visitMap = new Map<string, VisitWithDetails>();
+        for (const v of allVisits) visitMap.set(v.id, v);
+        setVisits(Array.from(visitMap.values()).sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        ));
+      } else {
+        setVisits([]);
+      }
     } finally {
       setLoadingVisits(false);
     }
