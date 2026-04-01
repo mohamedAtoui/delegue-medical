@@ -98,32 +98,38 @@ export default function DeleguesPage() {
     fetchVisits(rep.id);
   };
 
-  // Filter visits
+  // Filter: first find which doctors match based on the SELECTED REP's visits only,
+  // then return all visits for those doctors
   const filteredVisits = useMemo(() => {
-    let result = visits;
+    if (!selectedRep) return visits;
 
-    // Date filter
+    // Step 1: filter only this rep's visits by date and search
+    let repVisits = visits.filter((v) => v.user_id === selectedRep.id);
+
     if (dateRange !== "all") {
       const now = new Date();
       const from = new Date();
       if (dateRange === "today") from.setHours(0, 0, 0, 0);
       else if (dateRange === "week") from.setDate(now.getDate() - 7);
       else if (dateRange === "month") from.setMonth(now.getMonth() - 1);
-      result = result.filter((v) => new Date(v.created_at) >= from);
+      repVisits = repVisits.filter((v) => new Date(v.created_at) >= from);
     }
 
-    // Doctor search
     if (searchDoctor) {
       const s = searchDoctor.toLowerCase();
-      result = result.filter(
+      repVisits = repVisits.filter(
         (v) =>
           v.doctor?.first_name?.toLowerCase().includes(s) ||
           v.doctor?.last_name?.toLowerCase().includes(s)
       );
     }
 
-    return result;
-  }, [visits, dateRange, searchDoctor]);
+    // Step 2: get doctor IDs that matched
+    const matchedDoctorIds = new Set(repVisits.map((v) => v.doctor_id));
+
+    // Step 3: return ALL visits for those doctors (so other reps' comments show too)
+    return visits.filter((v) => matchedDoctorIds.has(v.doctor_id));
+  }, [visits, dateRange, searchDoctor, selectedRep]);
 
   // Group visits
   const groupedContent = useMemo(() => {
@@ -166,10 +172,13 @@ export default function DeleguesPage() {
 
   // Stats
   const stats = useMemo(() => {
-    const uniqueDoctors = new Set(filteredVisits.map((v) => v.doctor_id)).size;
-    const lastActivity = filteredVisits[0]?.created_at;
-    return { total: filteredVisits.length, uniqueDoctors, lastActivity };
-  }, [filteredVisits]);
+    const repOnly = selectedRep
+      ? filteredVisits.filter((v) => v.user_id === selectedRep.id)
+      : filteredVisits;
+    const uniqueDoctors = new Set(repOnly.map((v) => v.doctor_id)).size;
+    const lastActivity = repOnly[0]?.created_at;
+    return { total: repOnly.length, uniqueDoctors, lastActivity };
+  }, [filteredVisits, selectedRep]);
 
   const saveWilayas = async () => {
     if (!selectedRep) return;
