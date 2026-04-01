@@ -5,7 +5,7 @@ import { createClient } from "@/utils/supabase/server";
 export async function GET(request: NextRequest) {
   const { userId } = await auth();
   if (!userId) {
-    return NextResponse.json({ error: "Non autorise" }, { status: 401 });
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -18,11 +18,29 @@ export async function GET(request: NextRequest) {
     query = query.eq("role", role);
   }
 
-  const { data, error } = await query;
+  const { data: users, error } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  // Fetch territory assignments for all users
+  const { data: territories } = await supabase
+    .from("territory_assignments")
+    .select("user_id, wilaya");
+
+  const wilayaMap = new Map<string, string[]>();
+  territories?.forEach((t) => {
+    if (!wilayaMap.has(t.user_id)) {
+      wilayaMap.set(t.user_id, []);
+    }
+    wilayaMap.get(t.user_id)!.push(t.wilaya);
+  });
+
+  const enriched = (users || []).map((u) => ({
+    ...u,
+    wilayas: wilayaMap.get(u.id) || [],
+  }));
+
+  return NextResponse.json(enriched);
 }

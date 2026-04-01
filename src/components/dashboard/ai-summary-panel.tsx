@@ -1,34 +1,91 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { WilayaSelect } from "@/components/shared/wilaya-select";
-import { Sparkles, Loader2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Sparkles, Send, Loader2, User, Bot } from "lucide-react";
+import type { User as UserType } from "@/types";
+
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+}
 
 function cleanMarkdown(text: string): string {
   return text
-    .replace(/#{1,6}\s*/g, "")     // remove ## headers
-    .replace(/\*\*(.*?)\*\*/g, "$1") // remove **bold**
-    .replace(/\*(.*?)\*/g, "$1")     // remove *italic*
-    .replace(/^[-*]\s/gm, "• ")      // convert - or * list items to bullet
-    .replace(/`(.*?)`/g, "$1")       // remove `code`
+    .replace(/#{1,6}\s*/g, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/^[-*]\s/gm, "• ")
+    .replace(/`(.*?)`/g, "$1")
     .trim();
 }
 
+const EXAMPLE_PROMPTS = [
+  "Résumer les retours sur Synapgene",
+  "Quels médecins sont les plus réceptifs ?",
+  "Tendances de la semaine",
+  "Points d'action prioritaires",
+];
+
 export function AISummaryPanel() {
   const [wilaya, setWilaya] = useState("");
-  const [summary, setSummary] = useState("");
+  const [delegue, setDelegue] = useState("");
+  const [dateRange, setDateRange] = useState("month");
+  const [prompt, setPrompt] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [reps, setReps] = useState<UserType[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const generateSummary = async () => {
+  useEffect(() => {
+    fetch("/api/users?role=delegue")
+      .then((res) => res.json())
+      .then((data) => setReps(Array.isArray(data) ? data : []))
+      .catch(() => setReps([]));
+  }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const getDateFrom = () => {
+    const from = new Date();
+    if (dateRange === "today") from.setHours(0, 0, 0, 0);
+    else if (dateRange === "week") from.setDate(from.getDate() - 7);
+    else if (dateRange === "month") from.setMonth(from.getMonth() - 1);
+    else return undefined;
+    return from.toISOString();
+  };
+
+  const askAI = async (question: string) => {
+    if (!question.trim()) return;
+
+    const userMsg: Message = { role: "user", content: question };
+    setMessages((prev) => [...prev, userMsg]);
+    setPrompt("");
     setLoading(true);
-    setSummary("");
+
     try {
       const res = await fetch("/api/ai/summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wilaya: wilaya || undefined }),
+        body: JSON.stringify({
+          wilaya: wilaya || undefined,
+          user_id: delegue || undefined,
+          from: getDateFrom(),
+          prompt: question,
+        }),
       });
 
       if (!res.ok) {
@@ -37,31 +94,39 @@ export function AISummaryPanel() {
       }
 
       const data = await res.json();
-      setSummary(cleanMarkdown(data.summary));
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: cleanMarkdown(data.summary) },
+      ]);
     } catch (err) {
-      setSummary(
-        err instanceof Error
-          ? `Erreur: ${err.message}`
-          : "Erreur lors de la génération"
-      );
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: err instanceof Error ? `Erreur: ${err.message}` : "Erreur lors de la génération",
+        },
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Split summary into sections for better display
-  const sections = summary.split(/\n\n+/).filter(Boolean);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    askAI(prompt);
+  };
 
   return (
-    <Card>
+    <Card className="flex flex-col">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Sparkles className="h-4 w-4 text-accent" />
-          Résumé IA
+          Assistant IA
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row">
+      <CardContent className="flex flex-col gap-4 flex-1">
+        {/* Filters */}
+        <div className="flex flex-col gap-2 sm:flex-row">
           <div className="flex-1">
             <WilayaSelect
               value={wilaya}
@@ -69,48 +134,106 @@ export function AISummaryPanel() {
               placeholder="Toutes les wilayas"
             />
           </div>
-          <Button onClick={generateSummary} disabled={loading} className="cursor-pointer">
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Génération...
-              </>
-            ) : (
-              <>
-                <Sparkles className="mr-2 h-4 w-4" />
-                Générer le résumé
-              </>
-            )}
-          </Button>
+          <Select value={delegue} onValueChange={(v) => setDelegue(v ?? "")}>
+            <SelectTrigger className="flex-1">
+              <SelectValue placeholder="Tous les délégués" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les délégués</SelectItem>
+              {reps.map((r) => (
+                <SelectItem key={r.id} value={r.id}>
+                  {r.first_name} {r.last_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={dateRange} onValueChange={(v) => setDateRange(v ?? "month")}>
+            <SelectTrigger className="w-full sm:w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Aujourd&apos;hui</SelectItem>
+              <SelectItem value="week">Semaine</SelectItem>
+              <SelectItem value="month">Mois</SelectItem>
+              <SelectItem value="all">Tout</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        {summary && (
-          <div className="space-y-3">
-            {sections.map((section, i) => {
-              const lines = section.split("\n");
-              const isHeader = lines[0] && lines[0] === lines[0].toUpperCase() && lines[0].length < 50;
-
-              return (
-                <div key={i} className="rounded-lg bg-muted/50 p-4">
-                  {isHeader ? (
-                    <>
-                      <h4 className="text-sm font-semibold text-primary mb-2">
-                        {lines[0]}
-                      </h4>
-                      <p className="text-sm leading-relaxed text-foreground/85 whitespace-pre-wrap">
-                        {lines.slice(1).join("\n")}
-                      </p>
-                    </>
-                  ) : (
-                    <p className="text-sm leading-relaxed text-foreground/85 whitespace-pre-wrap">
-                      {section}
-                    </p>
-                  )}
+        {/* Messages */}
+        <div className="flex-1 min-h-[200px] max-h-[400px] overflow-y-auto space-y-3 rounded-lg border border-border/50 p-3 bg-muted/10">
+          {messages.length === 0 ? (
+            <div className="text-center py-8 space-y-4">
+              <Sparkles className="h-8 w-8 mx-auto text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground">
+                Posez une question sur vos données
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {EXAMPLE_PROMPTS.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => askAI(p)}
+                    className="text-xs bg-muted hover:bg-muted/80 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            messages.map((msg, i) => (
+              <div
+                key={i}
+                className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                {msg.role === "assistant" && (
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                    <Bot className="h-4 w-4 text-primary" />
+                  </div>
+                )}
+                <div
+                  className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
+                    msg.role === "user"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted/50"
+                  }`}
+                >
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                {msg.role === "user" && (
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+          {loading && (
+            <div className="flex gap-2">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                <Bot className="h-4 w-4 text-primary" />
+              </div>
+              <div className="bg-muted/50 rounded-lg px-3 py-2">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input */}
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <Input
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="Posez votre question..."
+            disabled={loading}
+            className="flex-1"
+          />
+          <Button type="submit" disabled={loading || !prompt.trim()} size="sm" className="cursor-pointer">
+            <Send className="h-4 w-4" />
+          </Button>
+        </form>
       </CardContent>
     </Card>
   );

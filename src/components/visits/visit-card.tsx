@@ -104,7 +104,7 @@ export function DoctorVisitGroup({
                   <div className="pb-3">
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        {showUser && visit.user && (
+                        {visit.user && (
                           <span className="flex items-center gap-1 font-medium text-foreground/70">
                             <User className="h-3 w-3" />
                             {visit.user.first_name} {visit.user.last_name}

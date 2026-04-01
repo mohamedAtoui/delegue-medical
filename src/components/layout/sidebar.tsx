@@ -6,7 +6,6 @@ import {
   ClipboardList,
   Stethoscope,
   LayoutDashboard,
-  MapPin,
   Users,
   LogOut,
 } from "lucide-react";
@@ -18,7 +17,6 @@ const allNavItems = [
   { href: "/medecins", label: "Médecins", icon: Stethoscope, roles: ["delegue", "superviseur"] },
   { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard, roles: ["superviseur"] },
   { href: "/delegues", label: "Délégués", icon: Users, roles: ["superviseur"] },
-  { href: "/territoires", label: "Territoires", icon: MapPin, roles: ["superviseur"] },
 ];
 
 export function Sidebar({ currentPath, role }: { currentPath: string; role: UserRole }) {
