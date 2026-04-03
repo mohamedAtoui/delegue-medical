@@ -2,6 +2,11 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { createClient } from "@/utils/supabase/server";
 import type { User } from "@/types";
 
+const SUPERVISOR_EMAILS = [
+  "attaimen40@gmail.com",
+  "sarl.handson@gmail.com",
+];
+
 export async function getOrCreateUser(): Promise<User | null> {
   const { userId } = await auth();
   if (!userId) return null;
@@ -28,7 +33,7 @@ export async function getOrCreateUser(): Promise<User | null> {
       email: clerkUser.emailAddresses[0]?.emailAddress ?? "",
       first_name: clerkUser.firstName,
       last_name: clerkUser.lastName,
-      role: "delegue",
+      role: SUPERVISOR_EMAILS.includes(clerkUser.emailAddresses[0]?.emailAddress ?? "") ? "superviseur" : "delegue",
     })
     .select()
     .single();
