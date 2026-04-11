@@ -40,6 +40,7 @@ export async function POST(
   const { id } = await params;
   const body = await request.json();
   const content: string = (body.content || "").trim();
+  const parent_id: string | null = body.parent_id || null;
 
   if (!content) {
     return NextResponse.json({ error: "Le commentaire ne peut pas être vide" }, { status: 400 });
@@ -57,6 +58,7 @@ export async function POST(
     .insert({
       visit_id: id,
       user_id: currentUser.id,
+      parent_id,
       content,
     })
     .select("*, user:users(id, first_name, last_name, avatar_url)")

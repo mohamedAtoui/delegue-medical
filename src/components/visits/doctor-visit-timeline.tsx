@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { MessageSquare, Clock, Target, FileText } from "lucide-react";
+import { MessageSquare, Clock, FileText } from "lucide-react";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import type { VisitWithDetails } from "@/types";
 
@@ -81,12 +81,6 @@ export function DoctorVisitTimeline({ doctorId, refreshKey = 0 }: DoctorVisitTim
               </div>
             </div>
 
-            {visit.objective && (
-              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                <Target className="h-3 w-3" />
-                {visit.objective}
-              </p>
-            )}
             {visit.compte_rendu ? (
               <p className="text-sm text-foreground/90 leading-relaxed">
                 <FileText className="inline h-3 w-3 mr-1 text-muted-foreground" />
