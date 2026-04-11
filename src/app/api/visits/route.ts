@@ -15,6 +15,8 @@ export async function GET(request: NextRequest) {
   const from = searchParams.get("from");
   const to = searchParams.get("to");
   const type = searchParams.get("type"); // medecin | pharmacien
+  const wilaya = searchParams.get("wilaya");
+  const search = searchParams.get("search")?.trim();
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "20");
   const all = searchParams.get("all") === "true";
@@ -22,9 +24,13 @@ export async function GET(request: NextRequest) {
 
   const supabase = await createClient();
 
+  // Use inner join on doctors when filtering by wilaya or doctor name
+  const needsInnerDoctor = !!wilaya || !!search;
+  const doctorSelect = needsInnerDoctor ? "doctor:doctors!inner(*)" : "doctor:doctors(*)";
+
   let query = supabase
     .from("visits")
-    .select("*, doctor:doctors(*), user:users(*)", { count: "exact" });
+    .select(`*, ${doctorSelect}, user:users(*)`, { count: "exact" });
 
   if (!all) {
     const currentUser = await getOrCreateUser();
@@ -40,6 +46,16 @@ export async function GET(request: NextRequest) {
   if (to) query = query.lte("created_at", to);
   if (type === "medecin" || type === "pharmacien") {
     query = query.eq("visit_type", type);
+  }
+  if (wilaya) {
+    query = query.eq("doctor.wilaya", wilaya);
+  }
+  if (search) {
+    // Search on doctor last/first name (via inner join)
+    const like = `%${search}%`;
+    query = query.or(`last_name.ilike.${like},first_name.ilike.${like}`, {
+      foreignTable: "doctor",
+    });
   }
 
   const { data, error, count } = await query
