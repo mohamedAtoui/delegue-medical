@@ -11,8 +11,11 @@ interface DoctorCardProps {
 }
 
 export function DoctorCard({ doctor, onClick }: DoctorCardProps) {
-  const icon = doctor.doctor_type === "pharmacien" ? Pill : Stethoscope;
-  const Icon = icon;
+  const isPharmacien = doctor.doctor_type === "pharmacien";
+  const Icon = isPharmacien ? Pill : Stethoscope;
+  const iconBg = isPharmacien ? "bg-accent/10" : "bg-primary/10";
+  const iconColor = isPharmacien ? "text-accent" : "text-primary";
+  const phoneDisplay = doctor.phone_mobile || doctor.phone_fixe || doctor.phone;
 
   return (
     <Card
@@ -20,19 +23,19 @@ export function DoctorCard({ doctor, onClick }: DoctorCardProps) {
       onClick={onClick}
     >
       <CardContent className="flex items-start gap-4 p-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
-          <Icon className="h-5 w-5 text-primary" />
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${iconBg}`}>
+          <Icon className={`h-5 w-5 ${iconColor}`} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-semibold text-sm">
-              {doctor.doctor_type === "pharmacien" ? "" : "Dr. "}
+              {isPharmacien ? "" : "Dr. "}
               {doctor.last_name} {doctor.first_name}
             </h3>
             <Badge variant="outline" className="text-xs">
-              {doctor.doctor_type === "pharmacien" ? "Pharmacien" : "Médecin"}
+              {isPharmacien ? "Pharmacien" : "Médecin"}
             </Badge>
-            {doctor.specialty && (
+            {doctor.specialty && !isPharmacien && (
               <Badge variant="secondary" className="text-xs">
                 {doctor.specialty}
               </Badge>
@@ -56,10 +59,10 @@ export function DoctorCard({ doctor, onClick }: DoctorCardProps) {
               <MapPin className="h-3 w-3" />
               {doctor.wilaya}
             </span>
-            {doctor.phone && (
+            {phoneDisplay && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Phone className="h-3 w-3" />
-                {doctor.phone}
+                {phoneDisplay}
               </span>
             )}
             {doctor.engagement != null && doctor.engagement > 0 && (

@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DoctorVisitGroup } from "@/components/visits/visit-card";
+import { VisitDetailDialog } from "@/components/visits/visit-detail-dialog";
+import { UserAvatar } from "@/components/shared/user-avatar";
 import { WILAYAS } from "@/lib/constants/wilayas";
 import { toast } from "sonner";
 import {
@@ -26,14 +28,18 @@ import {
   Search,
   Calendar,
   Stethoscope,
+  Pill,
+  Users,
   Clock,
   Save,
   Pencil,
 } from "lucide-react";
-import type { User as UserType, VisitWithDetails } from "@/types";
+import { cn } from "@/lib/utils";
+import type { User as UserType, VisitWithDetails, DoctorType } from "@/types";
 
 type GroupBy = "doctor" | "date" | "wilaya";
 type DateRange = "today" | "week" | "month" | "all";
+type TypeFilter = "all" | DoctorType;
 
 export default function DeleguesPage() {
   const [reps, setReps] = useState<UserType[]>([]);
@@ -44,12 +50,16 @@ export default function DeleguesPage() {
   // Filters
   const [groupBy, setGroupBy] = useState<GroupBy>("doctor");
   const [dateRange, setDateRange] = useState<DateRange>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [searchDoctor, setSearchDoctor] = useState("");
 
   // Wilaya editing
   const [editingWilayas, setEditingWilayas] = useState(false);
   const [editWilayas, setEditWilayas] = useState<string[]>([]);
   const [savingWilayas, setSavingWilayas] = useState(false);
+
+  // Visit detail
+  const [selectedVisit, setSelectedVisit] = useState<VisitWithDetails | null>(null);
 
   useEffect(() => {
     fetch("/api/users?role=delegue")
@@ -61,15 +71,13 @@ export default function DeleguesPage() {
   const fetchVisits = useCallback(async (userId: string) => {
     setLoadingVisits(true);
     try {
-      // First get this rep's visits only
+      // Get this rep's visits only
       const repRes = await fetch(`/api/visits?user_id=${userId}&limit=200`);
       const repData = await repRes.json();
       const repVisits: VisitWithDetails[] = repData.data || [];
 
-      // Get unique doctor IDs this rep visited
       const doctorIds = [...new Set(repVisits.map((v) => v.doctor_id))];
 
-      // Fetch ALL visits for those doctors (to show other reps' comments too)
       if (doctorIds.length > 0) {
         const allPromises = doctorIds.map((id) =>
           fetch(`/api/visits?doctor_id=${id}&all=true&limit=50`).then((r) => r.json())
@@ -77,12 +85,14 @@ export default function DeleguesPage() {
         const allResults = await Promise.all(allPromises);
         const allVisits: VisitWithDetails[] = allResults.flatMap((r) => r.data || []);
 
-        // Deduplicate by visit ID
         const visitMap = new Map<string, VisitWithDetails>();
         for (const v of allVisits) visitMap.set(v.id, v);
-        setVisits(Array.from(visitMap.values()).sort(
-          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        ));
+        setVisits(
+          Array.from(visitMap.values()).sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )
+        );
       } else {
         setVisits([]);
       }
@@ -95,15 +105,15 @@ export default function DeleguesPage() {
     setSelectedRep(rep);
     setSearchDoctor("");
     setDateRange("all");
+    setTypeFilter("all");
     fetchVisits(rep.id);
   };
 
-  // Filter: first find which doctors match based on the SELECTED REP's visits only,
-  // then return all visits for those doctors
+  // Filter visits
   const filteredVisits = useMemo(() => {
     if (!selectedRep) return visits;
 
-    // Step 1: filter only this rep's visits by date and search
+    // Step 1: filter only this rep's visits by filters
     let repVisits = visits.filter((v) => v.user_id === selectedRep.id);
 
     if (dateRange !== "all") {
@@ -115,6 +125,13 @@ export default function DeleguesPage() {
       repVisits = repVisits.filter((v) => new Date(v.created_at) >= from);
     }
 
+    if (typeFilter !== "all") {
+      repVisits = repVisits.filter((v) => {
+        const t = v.doctor?.doctor_type || v.visit_type;
+        return t === typeFilter;
+      });
+    }
+
     if (searchDoctor) {
       const s = searchDoctor.toLowerCase();
       repVisits = repVisits.filter(
@@ -124,24 +141,32 @@ export default function DeleguesPage() {
       );
     }
 
-    // Step 2: get doctor IDs that matched
     const matchedDoctorIds = new Set(repVisits.map((v) => v.doctor_id));
-
-    // Step 3: return ALL visits for those doctors (so other reps' comments show too)
     return visits.filter((v) => matchedDoctorIds.has(v.doctor_id));
-  }, [visits, dateRange, searchDoctor, selectedRep]);
+  }, [visits, dateRange, searchDoctor, selectedRep, typeFilter]);
 
   // Group visits
   const groupedContent = useMemo(() => {
     if (groupBy === "doctor") {
-      const map = new Map<string, { doctorName: string; specialty: string | null; wilaya: string; visits: VisitWithDetails[] }>();
+      const map = new Map<
+        string,
+        {
+          doctorName: string;
+          specialty: string | null;
+          wilaya: string;
+          doctorType: DoctorType;
+          visits: VisitWithDetails[];
+        }
+      >();
       for (const v of filteredVisits) {
         const id = v.doctor_id;
+        const isPharm = v.doctor?.doctor_type === "pharmacien";
         if (!map.has(id)) {
           map.set(id, {
-            doctorName: `Dr. ${v.doctor?.first_name || ""} ${v.doctor?.last_name || ""}`,
+            doctorName: `${isPharm ? "" : "Dr. "}${v.doctor?.last_name || ""} ${v.doctor?.first_name || ""}`.trim(),
             specialty: v.doctor?.specialty || null,
             wilaya: v.doctor?.wilaya || "",
+            doctorType: (v.doctor?.doctor_type || "medecin") as DoctorType,
             visits: [],
           });
         }
@@ -157,17 +182,22 @@ export default function DeleguesPage() {
         if (!map.has(day)) map.set(day, []);
         map.get(day)!.push(v);
       }
-      return { type: "date" as const, groups: Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0])) };
+      return {
+        type: "date" as const,
+        groups: Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0])),
+      };
     }
 
-    // Group by wilaya
     const map = new Map<string, VisitWithDetails[]>();
     for (const v of filteredVisits) {
       const w = v.doctor?.wilaya || "Inconnu";
       if (!map.has(w)) map.set(w, []);
       map.get(w)!.push(v);
     }
-    return { type: "wilaya" as const, groups: Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0])) };
+    return {
+      type: "wilaya" as const,
+      groups: Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0])),
+    };
   }, [filteredVisits, groupBy]);
 
   // Stats
@@ -177,7 +207,19 @@ export default function DeleguesPage() {
       : filteredVisits;
     const uniqueDoctors = new Set(repOnly.map((v) => v.doctor_id)).size;
     const lastActivity = repOnly[0]?.created_at;
-    return { total: repOnly.length, uniqueDoctors, lastActivity };
+    const medecinCount = repOnly.filter(
+      (v) => (v.doctor?.doctor_type || v.visit_type) === "medecin"
+    ).length;
+    const pharmCount = repOnly.filter(
+      (v) => (v.doctor?.doctor_type || v.visit_type) === "pharmacien"
+    ).length;
+    return {
+      total: repOnly.length,
+      uniqueDoctors,
+      lastActivity,
+      medecinCount,
+      pharmCount,
+    };
   }, [filteredVisits, selectedRep]);
 
   const saveWilayas = async () => {
@@ -192,7 +234,7 @@ export default function DeleguesPage() {
       setReps((prev) =>
         prev.map((r) => (r.id === selectedRep.id ? { ...r, wilayas: editWilayas } : r))
       );
-      setSelectedRep((prev) => prev ? { ...prev, wilayas: editWilayas } : prev);
+      setSelectedRep((prev) => (prev ? { ...prev, wilayas: editWilayas } : prev));
       toast.success("Wilayas mises à jour");
       setEditingWilayas(false);
     } catch {
@@ -222,31 +264,42 @@ export default function DeleguesPage() {
               <button
                 key={rep.id}
                 onClick={() => selectRep(rep)}
-                className={`w-full rounded-lg px-3 py-3 text-left text-sm transition-colors cursor-pointer ${
+                className={cn(
+                  "w-full rounded-lg px-3 py-3 text-left text-sm transition-colors cursor-pointer",
                   selectedRep?.id === rep.id
                     ? "bg-primary/10 border border-primary/20"
                     : "hover:bg-muted border border-transparent"
-                }`}
+                )}
               >
                 <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="font-medium">
+                  <UserAvatar
+                    firstName={rep.first_name}
+                    lastName={rep.last_name}
+                    imageUrl={rep.avatar_url}
+                    size="sm"
+                  />
+                  <span className="font-bold">
                     {rep.first_name} {rep.last_name}
                   </span>
                 </div>
                 {rep.phone && (
-                  <div className="flex items-center gap-1 mt-1 ml-6 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1 mt-1 ml-8 text-xs text-muted-foreground">
                     <Phone className="h-3 w-3" />
                     {rep.phone}
                   </div>
                 )}
                 {rep.wilayas && rep.wilayas.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5 ml-6">
-                    {rep.wilayas.map((w) => (
+                  <div className="flex flex-wrap gap-1 mt-1.5 ml-8">
+                    {rep.wilayas.slice(0, 3).map((w) => (
                       <Badge key={w} variant="outline" className="text-[10px] px-1.5 py-0">
                         {w}
                       </Badge>
                     ))}
+                    {rep.wilayas.length > 3 && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        +{rep.wilayas.length - 3}
+                      </Badge>
+                    )}
                   </div>
                 )}
               </button>
@@ -266,45 +319,68 @@ export default function DeleguesPage() {
               {/* Rep header + stats */}
               <Card>
                 <CardContent className="p-4">
-                  <div className="flex items-center justify-between flex-wrap gap-3">
-                    <div>
-                      <h2 className="text-lg font-semibold">
-                        {selectedRep.first_name} {selectedRep.last_name}
-                      </h2>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        {selectedRep.wilayas?.map((w) => (
-                          <Badge key={w} variant="secondary" className="text-xs">
-                            <MapPin className="mr-1 h-3 w-3" />
-                            {w}
-                          </Badge>
-                        ))}
-                        <button
-                          onClick={() => {
-                            setEditWilayas(selectedRep.wilayas || []);
-                            setEditingWilayas(true);
-                          }}
-                          className="text-xs text-primary hover:underline cursor-pointer"
-                        >
-                          <Pencil className="inline h-3 w-3 mr-1" />
-                          Modifier
-                        </button>
+                  <div className="flex items-start justify-between flex-wrap gap-3">
+                    <div className="flex items-center gap-3">
+                      <UserAvatar
+                        firstName={selectedRep.first_name}
+                        lastName={selectedRep.last_name}
+                        imageUrl={selectedRep.avatar_url}
+                        size="lg"
+                      />
+                      <div>
+                        <h2 className="text-lg font-bold">
+                          {selectedRep.first_name} {selectedRep.last_name}
+                        </h2>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {selectedRep.wilayas?.map((w) => (
+                            <Badge key={w} variant="secondary" className="text-xs">
+                              <MapPin className="mr-1 h-3 w-3" />
+                              {w}
+                            </Badge>
+                          ))}
+                          <button
+                            onClick={() => {
+                              setEditWilayas(selectedRep.wilayas || []);
+                              setEditingWilayas(true);
+                            }}
+                            className="text-xs text-primary hover:underline cursor-pointer"
+                          >
+                            <Pencil className="inline h-3 w-3 mr-1" />
+                            Modifier
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex gap-4 text-center">
+
+                    <div className="flex flex-wrap gap-4 text-center">
                       <div>
                         <p className="text-2xl font-bold text-primary">{stats.total}</p>
                         <p className="text-xs text-muted-foreground">Visites</p>
                       </div>
                       <div>
-                        <p className="text-2xl font-bold text-primary">{stats.uniqueDoctors}</p>
+                        <p className="text-2xl font-bold text-primary">
+                          {stats.uniqueDoctors}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Uniques</p>
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-primary">
+                          {stats.medecinCount}
+                        </p>
                         <p className="text-xs text-muted-foreground">Médecins</p>
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-accent">
+                          {stats.pharmCount}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Pharmaciens</p>
                       </div>
                       {stats.lastActivity && (
                         <div>
                           <p className="text-sm font-medium">
                             {format(new Date(stats.lastActivity), "d MMM", { locale: fr })}
                           </p>
-                          <p className="text-xs text-muted-foreground">Dernière activité</p>
+                          <p className="text-xs text-muted-foreground">Dernière</p>
                         </div>
                       )}
                     </div>
@@ -312,26 +388,65 @@ export default function DeleguesPage() {
                 </CardContent>
               </Card>
 
+              {/* Type tabs */}
+              <div className="grid grid-cols-3 gap-2 p-1 bg-muted/40 rounded-lg">
+                {([
+                  { key: "all", label: "Toutes", icon: Users },
+                  { key: "medecin", label: "Médecins", icon: Stethoscope },
+                  { key: "pharmacien", label: "Pharmaciens", icon: Pill },
+                ] as { key: TypeFilter; label: string; icon: typeof Users }[]).map((tab) => {
+                  const Icon = tab.icon;
+                  const active = typeFilter === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      onClick={() => setTypeFilter(tab.key)}
+                      className={cn(
+                        "flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-all cursor-pointer",
+                        active
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* Filter bar */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <Select value={groupBy} onValueChange={(v) => setGroupBy((v as GroupBy) || "doctor")}>
+                <Select
+                  value={groupBy}
+                  onValueChange={(v) => setGroupBy((v as GroupBy) || "doctor")}
+                >
                   <SelectTrigger className="w-full sm:w-44">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="doctor">
-                      <span className="flex items-center gap-2"><Stethoscope className="h-3 w-3" /> Par médecin</span>
+                      <span className="flex items-center gap-2">
+                        <Stethoscope className="h-3 w-3" /> Par médecin
+                      </span>
                     </SelectItem>
                     <SelectItem value="date">
-                      <span className="flex items-center gap-2"><Calendar className="h-3 w-3" /> Par date</span>
+                      <span className="flex items-center gap-2">
+                        <Calendar className="h-3 w-3" /> Par date
+                      </span>
                     </SelectItem>
                     <SelectItem value="wilaya">
-                      <span className="flex items-center gap-2"><MapPin className="h-3 w-3" /> Par wilaya</span>
+                      <span className="flex items-center gap-2">
+                        <MapPin className="h-3 w-3" /> Par wilaya
+                      </span>
                     </SelectItem>
                   </SelectContent>
                 </Select>
 
-                <Select value={dateRange} onValueChange={(v) => setDateRange((v as DateRange) || "all")}>
+                <Select
+                  value={dateRange}
+                  onValueChange={(v) => setDateRange((v as DateRange) || "all")}
+                >
                   <SelectTrigger className="w-full sm:w-40">
                     <SelectValue />
                   </SelectTrigger>
@@ -346,7 +461,7 @@ export default function DeleguesPage() {
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    placeholder="Chercher un médecin..."
+                    placeholder="Chercher un médecin/pharmacien..."
                     value={searchDoctor}
                     onChange={(e) => setSearchDoctor(e.target.value)}
                     className="pl-9"
@@ -375,8 +490,10 @@ export default function DeleguesPage() {
                       specialty={group.specialty}
                       wilaya={group.wilaya}
                       visits={group.visits}
+                      doctorType={group.doctorType}
                       showUser
                       highlightUserId={selectedRep?.id}
+                      onVisitClick={(v) => setSelectedVisit(v)}
                     />
                   ))}
                 </div>
@@ -402,23 +519,30 @@ export default function DeleguesPage() {
                       </h3>
                       <div className="space-y-2 ml-6">
                         {groupVisits.map((v) => (
-                          <Card key={v.id} className="p-3">
-                            <div className="flex items-center justify-between text-sm">
-                              <div>
+                          <Card
+                            key={v.id}
+                            className="p-3 cursor-pointer hover:bg-muted/30"
+                            onClick={() => setSelectedVisit(v)}
+                          >
+                            <div className="flex items-center justify-between text-sm flex-wrap gap-1">
+                              <div className="flex items-center gap-2">
                                 <span className="font-medium">
-                                  Dr. {v.doctor?.first_name} {v.doctor?.last_name}
+                                  {v.doctor?.doctor_type === "pharmacien" ? "" : "Dr. "}
+                                  {v.doctor?.last_name} {v.doctor?.first_name}
                                 </span>
                                 {v.doctor?.specialty && (
-                                  <Badge variant="secondary" className="ml-2 text-xs">{v.doctor.specialty}</Badge>
+                                  <Badge variant="secondary" className="text-xs">
+                                    {v.doctor.specialty}
+                                  </Badge>
                                 )}
                               </div>
                               <span className="text-xs text-muted-foreground">
                                 {format(new Date(v.created_at), "HH:mm", { locale: fr })}
                               </span>
                             </div>
-                            {v.notes && (
-                              <p className="text-sm text-foreground/80 mt-2 bg-muted/30 rounded p-2">
-                                {v.notes}
+                            {v.compte_rendu && (
+                              <p className="text-sm text-foreground/80 mt-2 bg-muted/30 rounded p-2 line-clamp-2">
+                                {v.compte_rendu}
                               </p>
                             )}
                           </Card>
@@ -469,13 +593,30 @@ export default function DeleguesPage() {
             })}
           </div>
           <div className="flex justify-end">
-            <Button onClick={saveWilayas} disabled={savingWilayas} className="cursor-pointer">
+            <Button
+              onClick={saveWilayas}
+              disabled={savingWilayas}
+              className="cursor-pointer"
+            >
               <Save className="mr-2 h-4 w-4" />
               {savingWilayas ? "Sauvegarde..." : "Sauvegarder"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Visit detail dialog */}
+      <VisitDetailDialog
+        visit={selectedVisit}
+        open={!!selectedVisit}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedVisit(null);
+            // refresh comment counts
+            if (selectedRep) fetchVisits(selectedRep.id);
+          }
+        }}
+      />
     </div>
   );
 }

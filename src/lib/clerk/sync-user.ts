@@ -20,20 +20,36 @@ export async function getOrCreateUser(): Promise<User | null> {
     .eq("clerk_id", userId)
     .single();
 
-  if (existingUser) return existingUser;
+  if (existingUser) {
+    // Keep avatar_url in sync with Clerk profile photo
+    const clerkUser = await currentUser();
+    if (clerkUser && clerkUser.imageUrl && existingUser.avatar_url !== clerkUser.imageUrl) {
+      const { data: updated } = await supabase
+        .from("users")
+        .update({ avatar_url: clerkUser.imageUrl, updated_at: new Date().toISOString() })
+        .eq("id", existingUser.id)
+        .select()
+        .single();
+      return updated ?? existingUser;
+    }
+    return existingUser;
+  }
 
   // User not in Supabase yet — create from Clerk data
   const clerkUser = await currentUser();
   if (!clerkUser) return null;
 
+  const email = clerkUser.emailAddresses[0]?.emailAddress ?? "";
+
   const { data: newUser, error } = await supabase
     .from("users")
     .insert({
       clerk_id: userId,
-      email: clerkUser.emailAddresses[0]?.emailAddress ?? "",
+      email,
       first_name: clerkUser.firstName,
       last_name: clerkUser.lastName,
-      role: SUPERVISOR_EMAILS.includes(clerkUser.emailAddresses[0]?.emailAddress ?? "") ? "superviseur" : "delegue",
+      avatar_url: clerkUser.imageUrl ?? null,
+      role: SUPERVISOR_EMAILS.includes(email) ? "superviseur" : "delegue",
     })
     .select()
     .single();

@@ -8,7 +8,18 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DoctorForm } from "@/components/doctors/doctor-form";
 import { VisitHistoryServer } from "@/components/visits/visit-history-server";
-import { Stethoscope, Pill, MapPin, Phone, Star, Pencil, ArrowLeft, Navigation } from "lucide-react";
+import {
+  Stethoscope,
+  Pill,
+  MapPin,
+  Phone,
+  Star,
+  Pencil,
+  ArrowLeft,
+  Navigation,
+  Mail,
+  Truck,
+} from "lucide-react";
 import type { Doctor, VisitWithDetails } from "@/types";
 
 export default function DoctorDetailPage() {
@@ -48,7 +59,10 @@ export default function DoctorDetailPage() {
     );
   }
 
-  const Icon = doctor.doctor_type === "pharmacien" ? Pill : Stethoscope;
+  const isPharmacien = doctor.doctor_type === "pharmacien";
+  const Icon = isPharmacien ? Pill : Stethoscope;
+  const iconBg = isPharmacien ? "bg-accent/10" : "bg-primary/10";
+  const iconColor = isPharmacien ? "text-accent" : "text-primary";
 
   return (
     <div className="space-y-6">
@@ -60,21 +74,21 @@ export default function DoctorDetailPage() {
       {/* Doctor info card */}
       <Card>
         <CardContent className="p-6">
-          <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between flex-wrap gap-3">
             <div className="flex gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                <Icon className="h-7 w-7 text-primary" />
+              <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full ${iconBg}`}>
+                <Icon className={`h-7 w-7 ${iconColor}`} />
               </div>
               <div>
                 <h1 className="text-xl font-bold">
-                  {doctor.doctor_type === "pharmacien" ? "" : "Dr. "}
+                  {isPharmacien ? "" : "Dr. "}
                   {doctor.last_name} {doctor.first_name}
                 </h1>
                 <div className="flex flex-wrap gap-2 mt-2">
                   <Badge variant="outline">
-                    {doctor.doctor_type === "pharmacien" ? "Pharmacien" : "Médecin"}
+                    {isPharmacien ? "Pharmacien" : "Médecin"}
                   </Badge>
-                  {doctor.specialty && (
+                  {doctor.specialty && !isPharmacien && (
                     <Badge variant="secondary">{doctor.specialty}</Badge>
                   )}
                   {doctor.potentiel && (
@@ -98,15 +112,27 @@ export default function DoctorDetailPage() {
                     {doctor.wilaya}
                     {doctor.address && ` — ${doctor.address}`}
                   </div>
-                  {doctor.phone && (
+                  {doctor.phone_fixe && (
                     <div className="flex items-center gap-2">
                       <Phone className="h-4 w-4" />
-                      {doctor.phone}
+                      <span className="font-medium text-foreground/80">Fixe :</span> {doctor.phone_fixe}
                     </div>
                   )}
-                  {doctor.latitude && doctor.longitude && (
+                  {doctor.phone_mobile && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4" />
+                      <span className="font-medium text-foreground/80">Portable :</span> {doctor.phone_mobile}
+                    </div>
+                  )}
+                  {doctor.email && (
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4" />
+                      {doctor.email}
+                    </div>
+                  )}
+                  {doctor.google_maps_url && (
                     <a
-                      href={`https://www.google.com/maps?q=${doctor.latitude},${doctor.longitude}`}
+                      href={doctor.google_maps_url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 text-primary hover:underline cursor-pointer"
@@ -115,9 +141,24 @@ export default function DoctorDetailPage() {
                       Voir sur Google Maps
                     </a>
                   )}
+                  {isPharmacien && (doctor.grossiste_pharma || doctor.grossiste_para_pharm) && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Truck className="h-4 w-4" />
+                      {doctor.grossiste_pharma && (
+                        <Badge variant="outline" className="text-xs">
+                          Pharma : {doctor.grossiste_pharma}
+                        </Badge>
+                      )}
+                      {doctor.grossiste_para_pharm && (
+                        <Badge variant="outline" className="text-xs">
+                          Para-pharm : {doctor.grossiste_para_pharm}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
                   {doctor.engagement != null && doctor.engagement > 0 && (
                     <div className="flex items-center gap-2">
-                      <span className="text-sm">Engagement:</span>
+                      <span className="text-sm">Engagement :</span>
                       <span className="flex items-center gap-0.5">
                         {[1, 2, 3, 4, 5].map((s) => (
                           <Star
@@ -146,7 +187,9 @@ export default function DoctorDetailPage() {
       {/* Visit history */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Historique des visites ({visits.length})</CardTitle>
+          <CardTitle className="text-base">
+            Historique des visites ({visits.length})
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <VisitHistoryServer visits={visits} showUser />
@@ -157,7 +200,9 @@ export default function DoctorDetailPage() {
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Modifier le médecin</DialogTitle>
+            <DialogTitle>
+              Modifier {isPharmacien ? "le pharmacien" : "le médecin"}
+            </DialogTitle>
           </DialogHeader>
           <DoctorForm
             initialData={doctor}

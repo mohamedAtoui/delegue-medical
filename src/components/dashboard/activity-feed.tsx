@@ -28,9 +28,9 @@ function FeedItem({ visit }: { visit: VisitWithDetails }) {
           <User className="h-3 w-3" />
           {visit.user?.first_name} {visit.user?.last_name}
         </div>
-        {visit.notes && (
+        {visit.compte_rendu && (
           <p className="text-xs text-foreground/70 mt-1 line-clamp-2">
-            {visit.notes}
+            {visit.compte_rendu}
           </p>
         )}
       </div>

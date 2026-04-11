@@ -38,13 +38,33 @@ export async function PUT(
 
   const { id } = await params;
   const body = await request.json();
-  const { first_name, last_name, doctor_type, specialty, address, latitude, longitude, wilaya, phone, potentiel, engagement } = body;
+  const {
+    first_name,
+    last_name,
+    doctor_type,
+    specialty,
+    address,
+    google_maps_url,
+    wilaya,
+    phone_fixe,
+    phone_mobile,
+    email,
+    grossiste_pharma,
+    grossiste_para_pharm,
+    potentiel,
+    engagement,
+  } = body;
 
   if (!first_name || !last_name || !wilaya) {
     return NextResponse.json(
       { error: "Prénom, nom et wilaya sont requis" },
       { status: 400 }
     );
+  }
+
+  const isPharmacien = doctor_type === "pharmacien";
+  if (!isPharmacien && !specialty) {
+    return NextResponse.json({ error: "La spécialité est requise pour un médecin" }, { status: 400 });
   }
 
   const supabase = await createClient();
@@ -55,12 +75,16 @@ export async function PUT(
       first_name,
       last_name,
       doctor_type: doctor_type || "medecin",
-      specialty: specialty || null,
+      specialty: isPharmacien ? null : (specialty || null),
       address: address || null,
-      latitude: latitude || null,
-      longitude: longitude || null,
+      google_maps_url: google_maps_url || null,
       wilaya,
-      phone: phone || null,
+      phone: phone_mobile || phone_fixe || null,
+      phone_fixe: phone_fixe || null,
+      phone_mobile: phone_mobile || null,
+      email: email || null,
+      grossiste_pharma: isPharmacien ? (grossiste_pharma || null) : null,
+      grossiste_para_pharm: isPharmacien ? (grossiste_para_pharm || null) : null,
       potentiel: potentiel || null,
       engagement: engagement || 0,
       updated_at: new Date().toISOString(),

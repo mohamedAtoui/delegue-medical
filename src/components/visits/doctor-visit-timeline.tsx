@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { MessageSquare, User, Clock } from "lucide-react";
+import { MessageSquare, Clock, Target, FileText } from "lucide-react";
+import { UserAvatar } from "@/components/shared/user-avatar";
 import type { VisitWithDetails } from "@/types";
 
 interface DoctorVisitTimelineProps {
@@ -18,7 +19,7 @@ export function DoctorVisitTimeline({ doctorId, refreshKey = 0 }: DoctorVisitTim
   const fetchVisits = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/visits?doctor_id=${doctorId}&all=true&limit=50`);
+      const res = await fetch(`/api/visits?doctor_id=${doctorId}&all=true&limit=10`);
       const data = await res.json();
       setVisits(data.data || []);
     } catch {
@@ -46,7 +47,7 @@ export function DoctorVisitTimeline({ doctorId, refreshKey = 0 }: DoctorVisitTim
     return (
       <div className="text-center py-6 text-sm text-muted-foreground">
         <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-40" />
-        Première visite avec ce médecin
+        Première visite
       </div>
     );
   }
@@ -62,11 +63,15 @@ export function DoctorVisitTimeline({ doctorId, refreshKey = 0 }: DoctorVisitTim
             key={visit.id}
             className="relative rounded-lg border border-border/50 bg-muted/20 p-3"
           >
-            {/* Header: who + when */}
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <User className="h-3 w-3" />
-                <span className="font-medium">
+                <UserAvatar
+                  firstName={visit.user?.first_name}
+                  lastName={visit.user?.last_name}
+                  imageUrl={visit.user?.avatar_url}
+                  size="sm"
+                />
+                <span className="font-bold text-foreground/80">
                   {visit.user?.first_name} {visit.user?.last_name}
                 </span>
               </div>
@@ -76,23 +81,22 @@ export function DoctorVisitTimeline({ doctorId, refreshKey = 0 }: DoctorVisitTim
               </div>
             </div>
 
-            {/* Notes */}
-            {visit.notes ? (
+            {visit.objective && (
+              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                <Target className="h-3 w-3" />
+                {visit.objective}
+              </p>
+            )}
+            {visit.compte_rendu ? (
               <p className="text-sm text-foreground/90 leading-relaxed">
-                {visit.notes}
+                <FileText className="inline h-3 w-3 mr-1 text-muted-foreground" />
+                <span className="line-clamp-2">{visit.compte_rendu}</span>
               </p>
             ) : (
               <p className="text-sm text-muted-foreground italic">
-                Aucune note
+                Aucun compte rendu
               </p>
             )}
-
-            {/* Product badge */}
-            <div className="mt-2">
-              <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
-                {visit.product?.name}
-              </span>
-            </div>
           </div>
         ))}
       </div>

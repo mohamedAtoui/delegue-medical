@@ -32,16 +32,19 @@ function cleanMarkdown(text: string): string {
 }
 
 const EXAMPLE_PROMPTS = [
-  "Résumer les retours sur Synapgene",
-  "Quels médecins sont les plus réceptifs ?",
-  "Tendances de la semaine",
-  "Points d'action prioritaires",
+  "Quels médecins ont promis de prescrire Synapgen ?",
+  "Combien d'objections prix ont été rencontrées ?",
+  "Quelles pharmacies ont accepté une commande ?",
+  "Résumer les retours patients positifs",
+  "Quelles marques de magnésium reviennent le plus ?",
+  "Points d'action prioritaires cette semaine",
 ];
 
 export function AISummaryPanel() {
   const [wilaya, setWilaya] = useState("");
   const [delegue, setDelegue] = useState("");
   const [dateRange, setDateRange] = useState("month");
+  const [typeFilter, setTypeFilter] = useState("");
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -82,8 +85,9 @@ export function AISummaryPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           wilaya: wilaya || undefined,
-          user_id: delegue || undefined,
+          user_id: delegue && delegue !== "all" ? delegue : undefined,
           from: getDateFrom(),
+          type: typeFilter && typeFilter !== "all" ? typeFilter : undefined,
           prompt: question,
         }),
       });
@@ -126,17 +130,15 @@ export function AISummaryPanel() {
       </CardHeader>
       <CardContent className="flex flex-col gap-4 flex-1">
         {/* Filters */}
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <div className="flex-1">
-            <WilayaSelect
-              value={wilaya}
-              onValueChange={setWilaya}
-              placeholder="Toutes les wilayas"
-            />
-          </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <WilayaSelect
+            value={wilaya}
+            onValueChange={setWilaya}
+            placeholder="Wilaya"
+          />
           <Select value={delegue} onValueChange={(v) => setDelegue(v ?? "")}>
-            <SelectTrigger className="flex-1">
-              <SelectValue placeholder="Tous les délégués" />
+            <SelectTrigger>
+              <SelectValue placeholder="Délégué" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les délégués</SelectItem>
@@ -147,8 +149,18 @@ export function AISummaryPanel() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v ?? "")}>
+            <SelectTrigger>
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous types</SelectItem>
+              <SelectItem value="medecin">Médecins</SelectItem>
+              <SelectItem value="pharmacien">Pharmaciens</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={dateRange} onValueChange={(v) => setDateRange(v ?? "month")}>
-            <SelectTrigger className="w-full sm:w-32">
+            <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

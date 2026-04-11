@@ -14,25 +14,32 @@ import {
 import { WilayaSelect } from "@/components/shared/wilaya-select";
 import { SPECIALTIES } from "@/lib/constants/specialties";
 import { toast } from "sonner";
-import { Star } from "lucide-react";
-import type { Doctor } from "@/types";
+import { Star, Stethoscope, Pill } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { Doctor, DoctorType } from "@/types";
 
 interface DoctorFormProps {
   onSuccess: (doctor: Doctor) => void;
   onCancel?: () => void;
   initialData?: Doctor | null;
+  defaultType?: DoctorType;
 }
 
-export function DoctorForm({ onSuccess, onCancel, initialData }: DoctorFormProps) {
+export function DoctorForm({ onSuccess, onCancel, initialData, defaultType }: DoctorFormProps) {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
-    doctor_type: "medecin",
+    doctor_type: (defaultType || "medecin") as DoctorType,
     specialty: "",
     address: "",
+    google_maps_url: "",
     wilaya: "",
-    phone: "",
+    phone_fixe: "",
+    phone_mobile: "",
+    email: "",
+    grossiste_pharma: "",
+    grossiste_para_pharm: "",
     potentiel: "",
     engagement: 0,
   });
@@ -45,8 +52,13 @@ export function DoctorForm({ onSuccess, onCancel, initialData }: DoctorFormProps
         doctor_type: initialData.doctor_type || "medecin",
         specialty: initialData.specialty || "",
         address: initialData.address || "",
+        google_maps_url: initialData.google_maps_url || "",
         wilaya: initialData.wilaya || "",
-        phone: initialData.phone || "",
+        phone_fixe: initialData.phone_fixe || "",
+        phone_mobile: initialData.phone_mobile || initialData.phone || "",
+        email: initialData.email || "",
+        grossiste_pharma: initialData.grossiste_pharma || "",
+        grossiste_para_pharm: initialData.grossiste_para_pharm || "",
         potentiel: initialData.potentiel || "",
         engagement: initialData.engagement || 0,
       });
@@ -54,12 +66,27 @@ export function DoctorForm({ onSuccess, onCancel, initialData }: DoctorFormProps
   }, [initialData]);
 
   const isEdit = !!initialData;
+  const isPharmacien = form.doctor_type === "pharmacien";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Common required
     if (!form.first_name || !form.last_name || !form.wilaya) {
-      toast.error("Prénom, nom et wilaya sont requis");
+      toast.error("Nom, prénom et wilaya sont requis");
+      return;
+    }
+    if (!form.address) {
+      toast.error("L'adresse est requise");
+      return;
+    }
+    if (!form.phone_fixe) {
+      toast.error("Le téléphone fixe est requis");
+      return;
+    }
+    // Médecin-specific
+    if (!isPharmacien && !form.specialty) {
+      toast.error("La spécialité est requise pour un médecin");
       return;
     }
 
@@ -74,9 +101,14 @@ export function DoctorForm({ onSuccess, onCancel, initialData }: DoctorFormProps
         body: JSON.stringify({
           ...form,
           potentiel: form.potentiel || null,
-          specialty: form.specialty || null,
-          phone: form.phone || null,
+          specialty: isPharmacien ? null : (form.specialty || null),
+          phone_fixe: form.phone_fixe || null,
+          phone_mobile: form.phone_mobile || null,
+          email: form.email || null,
           address: form.address || null,
+          google_maps_url: form.google_maps_url || null,
+          grossiste_pharma: isPharmacien ? (form.grossiste_pharma || null) : null,
+          grossiste_para_pharm: isPharmacien ? (form.grossiste_para_pharm || null) : null,
         }),
       });
 
@@ -86,7 +118,11 @@ export function DoctorForm({ onSuccess, onCancel, initialData }: DoctorFormProps
       }
 
       const doctor = await res.json();
-      toast.success(isEdit ? "Médecin modifié avec succès" : "Médecin ajouté avec succès");
+      toast.success(
+        isEdit
+          ? `${isPharmacien ? "Pharmacien" : "Médecin"} modifié avec succès`
+          : `${isPharmacien ? "Pharmacien" : "Médecin"} ajouté avec succès`
+      );
       onSuccess(doctor);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur lors de l'opération");
@@ -97,6 +133,40 @@ export function DoctorForm({ onSuccess, onCancel, initialData }: DoctorFormProps
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Type selector */}
+      <div className="space-y-2">
+        <Label>Type *</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, doctor_type: "medecin" })}
+            className={cn(
+              "flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all cursor-pointer",
+              form.doctor_type === "medecin"
+                ? "border-primary bg-primary/5 text-primary font-semibold"
+                : "border-border text-muted-foreground hover:border-primary/40"
+            )}
+          >
+            <Stethoscope className="h-5 w-5" />
+            Médecin
+          </button>
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, doctor_type: "pharmacien" })}
+            className={cn(
+              "flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all cursor-pointer",
+              form.doctor_type === "pharmacien"
+                ? "border-accent bg-accent/5 text-accent font-semibold"
+                : "border-border text-muted-foreground hover:border-accent/40"
+            )}
+          >
+            <Pill className="h-5 w-5" />
+            Pharmacien
+          </button>
+        </div>
+      </div>
+
+      {/* Names */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="last_name">Nom *</Label>
@@ -118,24 +188,10 @@ export function DoctorForm({ onSuccess, onCancel, initialData }: DoctorFormProps
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {/* Spécialité — médecin only */}
+      {!isPharmacien && (
         <div className="space-y-2">
-          <Label>Type *</Label>
-          <Select
-            value={form.doctor_type}
-            onValueChange={(v) => setForm({ ...form, doctor_type: v ?? "medecin" })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="medecin">Médecin</SelectItem>
-              <SelectItem value="pharmacien">Pharmacien</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>Spécialité</Label>
+          <Label>Spécialité *</Label>
           <Select
             value={form.specialty}
             onValueChange={(v) => setForm({ ...form, specialty: v ?? "" })}
@@ -152,8 +208,9 @@ export function DoctorForm({ onSuccess, onCancel, initialData }: DoctorFormProps
             </SelectContent>
           </Select>
         </div>
-      </div>
+      )}
 
+      {/* Wilaya */}
       <div className="space-y-2">
         <Label>Wilaya *</Label>
         <WilayaSelect
@@ -162,26 +219,66 @@ export function DoctorForm({ onSuccess, onCancel, initialData }: DoctorFormProps
         />
       </div>
 
+      {/* Adresse */}
       <div className="space-y-2">
-        <Label htmlFor="address">Adresse cabinet</Label>
+        <Label htmlFor="address">
+          {isPharmacien ? "Adresse *" : "Adresse cabinet *"}
+        </Label>
         <Input
           id="address"
           value={form.address}
           onChange={(e) => setForm({ ...form, address: e.target.value })}
-          placeholder="Adresse du cabinet"
+          placeholder={isPharmacien ? "Adresse de la pharmacie" : "Adresse du cabinet"}
         />
       </div>
 
+      {/* Google Maps link */}
       <div className="space-y-2">
-        <Label htmlFor="phone">Téléphone</Label>
+        <Label htmlFor="google_maps_url">Lien Google Maps</Label>
         <Input
-          id="phone"
-          value={form.phone}
-          onChange={(e) => setForm({ ...form, phone: e.target.value })}
-          placeholder="Numéro de téléphone"
+          id="google_maps_url"
+          value={form.google_maps_url}
+          onChange={(e) => setForm({ ...form, google_maps_url: e.target.value })}
+          placeholder="https://maps.google.com/..."
+          type="url"
         />
       </div>
 
+      {/* Phones */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="phone_fixe">Téléphone fixe *</Label>
+          <Input
+            id="phone_fixe"
+            value={form.phone_fixe}
+            onChange={(e) => setForm({ ...form, phone_fixe: e.target.value })}
+            placeholder="021 XX XX XX"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="phone_mobile">Téléphone portable</Label>
+          <Input
+            id="phone_mobile"
+            value={form.phone_mobile}
+            onChange={(e) => setForm({ ...form, phone_mobile: e.target.value })}
+            placeholder="0555 XX XX XX"
+          />
+        </div>
+      </div>
+
+      {/* Email */}
+      <div className="space-y-2">
+        <Label htmlFor="email">Email</Label>
+        <Input
+          id="email"
+          value={form.email}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+          placeholder="contact@exemple.com"
+          type="email"
+        />
+      </div>
+
+      {/* Potentiel + engagement */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label>Potentiel</Label>
@@ -222,14 +319,42 @@ export function DoctorForm({ onSuccess, onCancel, initialData }: DoctorFormProps
         </div>
       </div>
 
+      {/* Pharmacien-specific */}
+      {isPharmacien && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="grossiste_pharma">Grossiste Pharma</Label>
+            <Input
+              id="grossiste_pharma"
+              value={form.grossiste_pharma}
+              onChange={(e) => setForm({ ...form, grossiste_pharma: e.target.value })}
+              placeholder="Nom du grossiste"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="grossiste_para_pharm">Grossiste Para-Pharm</Label>
+            <Input
+              id="grossiste_para_pharm"
+              value={form.grossiste_para_pharm}
+              onChange={(e) => setForm({ ...form, grossiste_para_pharm: e.target.value })}
+              placeholder="Nom du grossiste"
+            />
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-2 justify-end pt-2">
         {onCancel && (
-          <Button type="button" variant="outline" onClick={onCancel}>
+          <Button type="button" variant="outline" onClick={onCancel} className="cursor-pointer">
             Annuler
           </Button>
         )}
-        <Button type="submit" disabled={loading}>
-          {loading ? "En cours..." : isEdit ? "Modifier" : "Ajouter le médecin"}
+        <Button type="submit" disabled={loading} className="cursor-pointer">
+          {loading
+            ? "En cours..."
+            : isEdit
+            ? "Modifier"
+            : `Ajouter le ${isPharmacien ? "pharmacien" : "médecin"}`}
         </Button>
       </div>
     </form>

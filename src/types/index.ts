@@ -1,5 +1,6 @@
 export type UserRole = "delegue" | "superviseur";
 export type DoctorType = "medecin" | "pharmacien";
+export type VisitType = "medecin" | "pharmacien";
 export type Potentiel = "A" | "B" | "C";
 
 export interface User {
@@ -9,6 +10,7 @@ export interface User {
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
+  avatar_url: string | null;
   role: UserRole;
   created_at: string;
   updated_at: string;
@@ -30,10 +32,16 @@ export interface Doctor {
   doctor_type: DoctorType;
   specialty: string | null;
   address: string | null;
+  google_maps_url: string | null;
   latitude: number | null;
   longitude: number | null;
   wilaya: string;
   phone: string | null;
+  phone_fixe: string | null;
+  phone_mobile: string | null;
+  email: string | null;
+  grossiste_pharma: string | null;
+  grossiste_para_pharm: string | null;
   potentiel: Potentiel | null;
   engagement: number | null;
   created_by: string | null;
@@ -46,15 +54,42 @@ export interface Visit {
   id: string;
   user_id: string;
   doctor_id: string;
-  product_id: string;
-  notes: string | null;
+  visit_type: VisitType;
+  objective: string | null;
+  compte_rendu: string | null;
+  // Médecin checklist
+  synapgen_solves: boolean | null;
+  already_prescribed: boolean | null;
+  promised_to_suggest: boolean | null;
+  price_objection: boolean | null;
+  prescribes_magnesium: boolean | null;
+  magnesium_brand: string | null;
+  fears_side_effects: boolean | null;
+  patient_feedback: boolean | null;
+  patient_feedback_comment: string | null;
+  ordonnance_return: boolean | null;
+  free_sample: boolean | null;
+  // Pharmacien fields
+  synapgen_count: number | null;
+  prescriptions_received: number | null;
+  prescribing_doctor: string | null;
+  accepted_order: boolean | null;
   created_at: string;
 }
 
 export interface VisitWithDetails extends Visit {
   doctor: Doctor;
-  product: Product;
   user: User;
+  comment_count?: number;
+}
+
+export interface VisitComment {
+  id: string;
+  visit_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  user?: Pick<User, "id" | "first_name" | "last_name" | "avatar_url">;
 }
 
 export interface TerritoryAssignment {

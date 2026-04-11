@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, Stethoscope, Pill, Users } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,13 +15,17 @@ import {
 import { DoctorCard } from "@/components/doctors/doctor-card";
 import { WilayaSelect } from "@/components/shared/wilaya-select";
 import { SPECIALTIES } from "@/lib/constants/specialties";
-import type { Doctor } from "@/types";
+import { cn } from "@/lib/utils";
+import type { Doctor, DoctorType } from "@/types";
+
+type TypeFilter = "all" | DoctorType;
 
 export default function MedecinsPage() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [search, setSearch] = useState("");
   const [wilaya, setWilaya] = useState("");
   const [specialty, setSpecialty] = useState("");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [loading, setLoading] = useState(true);
 
   const fetchDoctors = useCallback(async () => {
@@ -31,6 +35,7 @@ export default function MedecinsPage() {
       if (search) params.set("search", search);
       if (wilaya) params.set("wilaya", wilaya);
       if (specialty) params.set("specialty", specialty);
+      if (typeFilter !== "all") params.set("type", typeFilter);
 
       const res = await fetch(`/api/doctors?${params}`);
       const data = await res.json();
@@ -38,7 +43,7 @@ export default function MedecinsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, wilaya, specialty]);
+  }, [search, wilaya, specialty, typeFilter]);
 
   useEffect(() => {
     const timeout = setTimeout(fetchDoctors, 300);
@@ -47,12 +52,11 @@ export default function MedecinsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Médecins</h1>
+          <h1 className="text-2xl font-bold text-foreground">Répertoire</h1>
           <p className="text-sm text-muted-foreground">
-            Répertoire des médecins et pharmaciens
+            Médecins et pharmaciens
           </p>
         </div>
         <Link href="/medecins/nouveau">
@@ -61,6 +65,33 @@ export default function MedecinsPage() {
             Ajouter
           </Button>
         </Link>
+      </div>
+
+      {/* Type tabs */}
+      <div className="grid grid-cols-3 gap-2 p-1 bg-muted/40 rounded-lg">
+        {([
+          { key: "all", label: "Tous", icon: Users },
+          { key: "medecin", label: "Médecins", icon: Stethoscope },
+          { key: "pharmacien", label: "Pharmaciens", icon: Pill },
+        ] as { key: TypeFilter; label: string; icon: typeof Users }[]).map((tab) => {
+          const Icon = tab.icon;
+          const active = typeFilter === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setTypeFilter(tab.key)}
+              className={cn(
+                "flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-all cursor-pointer",
+                active
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Filters */}
@@ -74,21 +105,23 @@ export default function MedecinsPage() {
             className="pl-9"
           />
         </div>
-        <div className="w-full sm:w-48">
-          <Select value={specialty} onValueChange={(v) => setSpecialty(v ?? "")}>
-            <SelectTrigger>
-              <SelectValue placeholder="Spécialité" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toutes</SelectItem>
-              {SPECIALTIES.map((spec) => (
-                <SelectItem key={spec} value={spec}>
-                  {spec}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {typeFilter !== "pharmacien" && (
+          <div className="w-full sm:w-48">
+            <Select value={specialty} onValueChange={(v) => setSpecialty(v ?? "")}>
+              <SelectTrigger>
+                <SelectValue placeholder="Spécialité" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes</SelectItem>
+                {SPECIALTIES.map((spec) => (
+                  <SelectItem key={spec} value={spec}>
+                    {spec}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="w-full sm:w-48">
           <WilayaSelect
             value={wilaya}
@@ -107,7 +140,7 @@ export default function MedecinsPage() {
         </div>
       ) : doctors.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-muted-foreground">Aucun médecin trouvé</p>
+          <p className="text-muted-foreground">Aucun résultat</p>
         </div>
       ) : (
         <div className="space-y-3">
