@@ -5,13 +5,11 @@ import { createClient } from "@/utils/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity } from "lucide-react";
 import { VisitEntry } from "@/components/visits/visit-entry";
-import { VisitDetailDialog } from "@/components/visits/visit-detail-dialog";
 import type { VisitWithDetails } from "@/types";
 
 export function ActivityFeed() {
   const [visits, setVisits] = useState<VisitWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<VisitWithDetails | null>(null);
 
   const fetchRecent = useCallback(async () => {
     try {
@@ -43,16 +41,8 @@ export function ActivityFeed() {
     };
   }, [fetchRecent]);
 
-  const handleDialogClose = (open: boolean) => {
-    if (!open) {
-      setSelected(null);
-      fetchRecent();
-    }
-  };
-
   return (
-    <>
-      <Card>
+    <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Activity className="h-4 w-4 text-primary" />
@@ -75,23 +65,17 @@ export function ActivityFeed() {
               Aucune activité récente
             </p>
           ) : (
-            visits.map((visit) => (
-              <VisitEntry
-                key={visit.id}
-                visit={visit}
-                showUser
-                onClick={(v) => setSelected(v)}
-              />
-            ))
+            <div className="space-y-2">
+              {visits.map((visit) => (
+                <VisitEntry
+                  key={visit.id}
+                  visit={visit}
+                  showUser
+                />
+              ))}
+            </div>
           )}
         </CardContent>
-      </Card>
-
-      <VisitDetailDialog
-        visit={selected}
-        open={!!selected}
-        onOpenChange={handleDialogClose}
-      />
-    </>
+    </Card>
   );
 }
