@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,10 +13,11 @@ import {
   ChevronUp,
   Clock,
   MessageSquare,
+  CornerDownRight,
 } from "lucide-react";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { cn } from "@/lib/utils";
-import type { VisitWithDetails, DoctorType } from "@/types";
+import type { VisitWithDetails, VisitComment, DoctorType } from "@/types";
 
 interface DoctorVisitGroupProps {
   doctorName: string;
@@ -200,6 +201,9 @@ export function DoctorVisitGroup({
                       >
                         <span className="line-clamp-3">{summary}</span>
                       </p>
+
+                      {/* Inline comment preview */}
+                      <InlineComments visitId={visit.id} visitAuthorId={visit.user_id} />
                     </div>
                   </div>
                 );
@@ -209,5 +213,146 @@ export function DoctorVisitGroup({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function InlineComments({
+  visitId,
+  visitAuthorId,
+}: {
+  visitId: string;
+  visitAuthorId: string;
+}) {
+  const [comments, setComments] = useState<VisitComment[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  const fetchComments = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/visits/${visitId}/comments`);
+      const json = await res.json();
+      setComments(json.data || []);
+    } catch {
+      setComments([]);
+    } finally {
+      setLoaded(true);
+    }
+  }, [visitId]);
+
+  useEffect(() => {
+    fetchComments();
+  }, [fetchComments]);
+
+  if (!loaded || comments.length === 0) return null;
+
+  // Group into threads (parent + replies)
+  const roots = comments.filter((c) => !c.parent_id);
+  const replyMap = new Map<string, VisitComment[]>();
+  comments.forEach((c) => {
+    if (c.parent_id) {
+      if (!replyMap.has(c.parent_id)) replyMap.set(c.parent_id, []);
+      replyMap.get(c.parent_id)!.push(c);
+    }
+  });
+
+  // Show at most 3 root comments
+  const shown = roots.slice(-3);
+
+  return (
+    <div
+      className="mt-2 space-y-1.5"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {roots.length > 3 && (
+        <p className="text-[10px] text-muted-foreground/70 ml-1">
+          +{roots.length - 3} commentaire{roots.length - 3 > 1 ? "s" : ""} précédent{roots.length - 3 > 1 ? "s" : ""}
+        </p>
+      )}
+      {shown.map((c) => {
+        const isAuthor = c.user_id === visitAuthorId;
+        const replies = replyMap.get(c.id) || [];
+        return (
+          <div key={c.id}>
+            <div className="flex items-start gap-1.5">
+              <UserAvatar
+                firstName={c.user?.first_name}
+                lastName={c.user?.last_name}
+                imageUrl={c.user?.avatar_url}
+                size="sm"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-1.5">
+                  <span
+                    className={cn(
+                      "text-[11px] font-bold",
+                      isAuthor ? "text-green-700" : "text-foreground/80"
+                    )}
+                  >
+                    {c.user?.first_name} {c.user?.last_name}
+                  </span>
+                  <span className="text-[9px] text-muted-foreground/60">
+                    {format(new Date(c.created_at), "d MMM · HH:mm", {
+                      locale: fr,
+                    })}
+                  </span>
+                </div>
+                <p
+                  className={cn(
+                    "text-xs leading-relaxed mt-0.5 line-clamp-2",
+                    isAuthor ? "text-green-800/80" : "text-foreground/70"
+                  )}
+                >
+                  {c.content}
+                </p>
+              </div>
+            </div>
+            {/* Show up to 2 replies */}
+            {replies.slice(-2).map((r) => {
+              const rIsAuthor = r.user_id === visitAuthorId;
+              return (
+                <div key={r.id} className="flex items-start gap-1.5 ml-6 mt-1">
+                  <CornerDownRight className="h-3 w-3 text-muted-foreground/40 mt-0.5 shrink-0" />
+                  <UserAvatar
+                    firstName={r.user?.first_name}
+                    lastName={r.user?.last_name}
+                    imageUrl={r.user?.avatar_url}
+                    size="sm"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-1.5">
+                      <span
+                        className={cn(
+                          "text-[11px] font-bold",
+                          rIsAuthor ? "text-green-700" : "text-foreground/80"
+                        )}
+                      >
+                        {r.user?.first_name} {r.user?.last_name}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground/60">
+                        {format(new Date(r.created_at), "d MMM · HH:mm", {
+                          locale: fr,
+                        })}
+                      </span>
+                    </div>
+                    <p
+                      className={cn(
+                        "text-xs leading-relaxed mt-0.5 line-clamp-2",
+                        rIsAuthor ? "text-green-800/80" : "text-foreground/70"
+                      )}
+                    >
+                      {r.content}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+            {replies.length > 2 && (
+              <p className="text-[9px] text-muted-foreground/60 ml-6 mt-0.5">
+                +{replies.length - 2} réponse{replies.length - 2 > 1 ? "s" : ""}
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }

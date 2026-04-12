@@ -26,6 +26,7 @@ import {
   Target,
   FileText,
   CornerDownRight,
+  ChevronDown,
 } from "lucide-react";
 import type { VisitWithDetails, VisitComment } from "@/types";
 import { cn } from "@/lib/utils";
@@ -158,6 +159,7 @@ export function VisitDetailDialog({
   const [replyTo, setReplyTo] = useState<VisitComment | null>(null);
   const [replyText, setReplyText] = useState("");
   const [sendingReply, setSendingReply] = useState(false);
+  const [evalOpen, setEvalOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const replyInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -356,54 +358,68 @@ export function VisitDetailDialog({
             </div>
           )}
 
-          {/* Médecin checklist */}
+          {/* Médecin checklist — collapsible */}
           {!isPharm && (
-            <div className="rounded-lg border border-border p-3 bg-muted/10">
-              <p className="text-xs font-semibold text-foreground/80 mb-2">
-                Évaluation
-              </p>
-              <div className="space-y-0.5">
-                <YesNoBadge
-                  value={visit.synapgen_solves}
-                  label="Synapgen répond-il aux besoins ?"
+            <div className="rounded-lg border border-border bg-muted/10 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setEvalOpen((v) => !v)}
+                className="w-full flex items-center justify-between p-3 cursor-pointer hover:bg-muted/20 transition-colors"
+              >
+                <span className="text-xs font-semibold text-foreground/80">
+                  Évaluation
+                </span>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-muted-foreground transition-transform",
+                    evalOpen && "rotate-180"
+                  )}
                 />
-                <YesNoBadge
-                  value={visit.already_prescribed}
-                  label="A-t-il déjà prescrit ?"
-                />
-                <YesNoBadge
-                  value={visit.promised_to_suggest}
-                  label="A-t-il promis de le suggérer ?"
-                />
-                <YesNoBadge value={visit.price_objection} label="Objection prix" />
-                <YesNoBadge
-                  value={visit.prescribes_magnesium}
-                  label="Prescrit beaucoup de magnésium"
-                />
-                {visit.magnesium_brand && (
-                  <div className="text-xs text-muted-foreground pl-2 italic">
-                    Marque : {visit.magnesium_brand}
-                  </div>
-                )}
-                <YesNoBadge
-                  value={visit.fears_side_effects}
-                  label="Crainte d'effets secondaires"
-                />
-                <YesNoBadge value={visit.patient_feedback} label="Retour patients" />
-                {visit.patient_feedback_comment && (
-                  <div className="text-xs text-muted-foreground pl-2 italic">
-                    « {visit.patient_feedback_comment} »
-                  </div>
-                )}
-                <YesNoBadge
-                  value={visit.ordonnance_return}
-                  label="Retour d'ordonnance"
-                />
-                <YesNoBadge
-                  value={visit.free_sample}
-                  label="Échantillon gratuit donné"
-                />
-              </div>
+              </button>
+              {evalOpen && (
+                <div className="px-3 pb-3 space-y-0.5 border-t border-border/50 pt-2">
+                  <YesNoBadge
+                    value={visit.synapgen_solves}
+                    label="Synapgen répond-il aux besoins ?"
+                  />
+                  <YesNoBadge
+                    value={visit.already_prescribed}
+                    label="A-t-il déjà prescrit ?"
+                  />
+                  <YesNoBadge
+                    value={visit.promised_to_suggest}
+                    label="A-t-il promis de le suggérer ?"
+                  />
+                  <YesNoBadge value={visit.price_objection} label="Objection prix" />
+                  <YesNoBadge
+                    value={visit.prescribes_magnesium}
+                    label="Prescrit beaucoup de magnésium"
+                  />
+                  {visit.magnesium_brand && (
+                    <div className="text-xs text-muted-foreground pl-2 italic">
+                      Marque : {visit.magnesium_brand}
+                    </div>
+                  )}
+                  <YesNoBadge
+                    value={visit.fears_side_effects}
+                    label="Crainte d'effets secondaires"
+                  />
+                  <YesNoBadge value={visit.patient_feedback} label="Retour patients" />
+                  {visit.patient_feedback_comment && (
+                    <div className="text-xs text-muted-foreground pl-2 italic">
+                      « {visit.patient_feedback_comment} »
+                    </div>
+                  )}
+                  <YesNoBadge
+                    value={visit.ordonnance_return}
+                    label="Retour d'ordonnance"
+                  />
+                  <YesNoBadge
+                    value={visit.free_sample}
+                    label="Échantillon gratuit donné"
+                  />
+                </div>
+              )}
             </div>
           )}
 
