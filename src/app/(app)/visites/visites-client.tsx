@@ -9,6 +9,7 @@ import {
   Users,
   Search,
   X,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,14 +21,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { WILAYAS } from "@/lib/constants/wilayas";
+import { WilayaSelect } from "@/components/shared/wilaya-select";
 import { VisitForm } from "@/components/visits/visit-form";
 import { VisitHistory } from "@/components/visits/visit-history";
 import { cn } from "@/lib/utils";
 import type { DoctorType, User, UserRole } from "@/types";
 
-type TypeFilter = "all" | DoctorType;
-type DateRange = "today" | "week" | "month" | "all";
+type TypeFilter = "" | DoctorType;
+type DateRange = "" | "today" | "week" | "month";
 
 interface VisitesClientProps {
   role: UserRole;
@@ -37,10 +38,10 @@ export function VisitesClient({ role }: VisitesClientProps) {
   const isSupervisor = role === "superviseur";
   const [refreshKey, setRefreshKey] = useState(0);
   const [showForm, setShowForm] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-  const [dateRange, setDateRange] = useState<DateRange>("all");
-  const [wilayaFilter, setWilayaFilter] = useState<string>("all");
-  const [delegueFilter, setDelegueFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
+  const [dateRange, setDateRange] = useState<DateRange>("");
+  const [wilayaFilter, setWilayaFilter] = useState("");
+  const [delegueFilter, setDelegueFilter] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [reps, setReps] = useState<User[]>([]);
@@ -61,7 +62,7 @@ export function VisitesClient({ role }: VisitesClientProps) {
   }, [isSupervisor]);
 
   const getFrom = (): string | undefined => {
-    if (dateRange === "all") return undefined;
+    if (!dateRange) return undefined;
     const from = new Date();
     if (dateRange === "today") from.setHours(0, 0, 0, 0);
     else if (dateRange === "week") from.setDate(from.getDate() - 7);
@@ -70,17 +71,17 @@ export function VisitesClient({ role }: VisitesClientProps) {
   };
 
   const activeFilterCount =
-    (typeFilter !== "all" ? 1 : 0) +
-    (dateRange !== "all" ? 1 : 0) +
-    (wilayaFilter !== "all" ? 1 : 0) +
-    (delegueFilter !== "all" ? 1 : 0) +
+    (typeFilter ? 1 : 0) +
+    (dateRange ? 1 : 0) +
+    (wilayaFilter ? 1 : 0) +
+    (delegueFilter ? 1 : 0) +
     (search ? 1 : 0);
 
   const resetFilters = () => {
-    setTypeFilter("all");
-    setDateRange("all");
-    setWilayaFilter("all");
-    setDelegueFilter("all");
+    setTypeFilter("");
+    setDateRange("");
+    setWilayaFilter("");
+    setDelegueFilter("");
     setSearchInput("");
   };
 
@@ -143,7 +144,7 @@ export function VisitesClient({ role }: VisitesClientProps) {
         <div className="grid grid-cols-3 gap-2 p-1 bg-muted/40 rounded-lg">
           {(
             [
-              { key: "all", label: "Toutes", icon: Users },
+              { key: "", label: "Toutes", icon: Users },
               { key: "medecin", label: "Médecins", icon: Stethoscope },
               { key: "pharmacien", label: "Pharmaciens", icon: Pill },
             ] as { key: TypeFilter; label: string; icon: typeof Users }[]
@@ -152,7 +153,7 @@ export function VisitesClient({ role }: VisitesClientProps) {
             const active = typeFilter === tab.key;
             return (
               <button
-                key={tab.key}
+                key={tab.key || "all"}
                 onClick={() => setTypeFilter(tab.key)}
                 className={cn(
                   "flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-all cursor-pointer",
@@ -174,11 +175,7 @@ export function VisitesClient({ role }: VisitesClientProps) {
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder={
-              isSupervisor
-                ? "Rechercher un médecin ou pharmacien…"
-                : "Rechercher…"
-            }
+            placeholder="Rechercher par nom du médecin ou pharmacien…"
             className="pl-9 pr-9"
           />
           {searchInput && (
@@ -196,52 +193,43 @@ export function VisitesClient({ role }: VisitesClientProps) {
         <div
           className={cn(
             "grid gap-2",
-            isSupervisor ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-1"
+            isSupervisor
+              ? "grid-cols-1 sm:grid-cols-3"
+              : "grid-cols-1"
           )}
         >
           <Select
             value={dateRange}
-            onValueChange={(v) => setDateRange((v as DateRange) ?? "all")}
+            onValueChange={(v) => setDateRange(v as DateRange)}
           >
             <SelectTrigger>
-              <SelectValue />
+              <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground mr-1" />
+              <SelectValue placeholder="Toutes les dates" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes les dates</SelectItem>
               <SelectItem value="today">Aujourd&apos;hui</SelectItem>
               <SelectItem value="week">Cette semaine</SelectItem>
-              <SelectItem value="month">Ce mois</SelectItem>
+              <SelectItem value="month">Ce mois-ci</SelectItem>
             </SelectContent>
           </Select>
 
           {isSupervisor && (
             <>
-              <Select
+              <WilayaSelect
                 value={wilayaFilter}
-                onValueChange={(v) => setWilayaFilter(v ?? "all")}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Wilaya" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes les wilayas</SelectItem>
-                  {WILAYAS.map((w) => (
-                    <SelectItem key={w.code} value={w.name}>
-                      {w.code} - {w.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onValueChange={setWilayaFilter}
+                placeholder="Toutes les wilayas"
+                showAll
+              />
 
               <Select
                 value={delegueFilter}
-                onValueChange={(v) => setDelegueFilter(v ?? "all")}
+                onValueChange={(v) => setDelegueFilter(v ?? "")}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Délégué" />
+                  <SelectValue placeholder="Tous les délégués" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous les délégués</SelectItem>
                   {reps.map((r) => (
                     <SelectItem key={r.id} value={r.id}>
                       {r.first_name} {r.last_name}
@@ -254,15 +242,16 @@ export function VisitesClient({ role }: VisitesClientProps) {
         </div>
 
         {activeFilterCount > 0 && (
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center justify-between text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
             <span>
               {activeFilterCount} filtre{activeFilterCount > 1 ? "s" : ""} actif
               {activeFilterCount > 1 ? "s" : ""}
             </span>
             <button
               onClick={resetFilters}
-              className="text-primary hover:underline cursor-pointer font-medium"
+              className="flex items-center gap-1 text-primary hover:underline cursor-pointer font-medium"
             >
+              <X className="h-3 w-3" />
               Réinitialiser
             </button>
           </div>
@@ -273,10 +262,10 @@ export function VisitesClient({ role }: VisitesClientProps) {
       <VisitHistory
         refreshKey={refreshKey}
         showUser={isSupervisor}
-        typeFilter={typeFilter}
+        typeFilter={typeFilter || "all"}
         from={getFrom()}
-        wilaya={wilayaFilter !== "all" ? wilayaFilter : undefined}
-        userId={delegueFilter !== "all" ? delegueFilter : undefined}
+        wilaya={wilayaFilter || undefined}
+        userId={delegueFilter || undefined}
         search={search || undefined}
       />
     </div>

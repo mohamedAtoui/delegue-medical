@@ -38,8 +38,8 @@ import { cn } from "@/lib/utils";
 import type { User as UserType, VisitWithDetails, DoctorType } from "@/types";
 
 type GroupBy = "doctor" | "date" | "wilaya";
-type DateRange = "today" | "week" | "month" | "all";
-type TypeFilter = "all" | DoctorType;
+type DateRange = "" | "today" | "week" | "month";
+type TypeFilter = "" | DoctorType;
 
 export default function DeleguesPage() {
   const [reps, setReps] = useState<UserType[]>([]);
@@ -49,8 +49,8 @@ export default function DeleguesPage() {
 
   // Filters
   const [groupBy, setGroupBy] = useState<GroupBy>("doctor");
-  const [dateRange, setDateRange] = useState<DateRange>("all");
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [dateRange, setDateRange] = useState<DateRange>("");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
   const [searchDoctor, setSearchDoctor] = useState("");
 
   // Wilaya editing
@@ -104,8 +104,8 @@ export default function DeleguesPage() {
   const selectRep = (rep: UserType) => {
     setSelectedRep(rep);
     setSearchDoctor("");
-    setDateRange("all");
-    setTypeFilter("all");
+    setDateRange("");
+    setTypeFilter("");
     fetchVisits(rep.id);
   };
 
@@ -116,7 +116,7 @@ export default function DeleguesPage() {
     // Step 1: filter only this rep's visits by filters
     let repVisits = visits.filter((v) => v.user_id === selectedRep.id);
 
-    if (dateRange !== "all") {
+    if (dateRange) {
       const now = new Date();
       const from = new Date();
       if (dateRange === "today") from.setHours(0, 0, 0, 0);
@@ -125,7 +125,7 @@ export default function DeleguesPage() {
       repVisits = repVisits.filter((v) => new Date(v.created_at) >= from);
     }
 
-    if (typeFilter !== "all") {
+    if (typeFilter) {
       repVisits = repVisits.filter((v) => {
         const t = v.doctor?.doctor_type || v.visit_type;
         return t === typeFilter;
@@ -391,7 +391,7 @@ export default function DeleguesPage() {
               {/* Type tabs */}
               <div className="grid grid-cols-3 gap-2 p-1 bg-muted/40 rounded-lg">
                 {([
-                  { key: "all", label: "Toutes", icon: Users },
+                  { key: "", label: "Toutes", icon: Users },
                   { key: "medecin", label: "Médecins", icon: Stethoscope },
                   { key: "pharmacien", label: "Pharmaciens", icon: Pill },
                 ] as { key: TypeFilter; label: string; icon: typeof Users }[]).map((tab) => {
@@ -445,16 +445,15 @@ export default function DeleguesPage() {
 
                 <Select
                   value={dateRange}
-                  onValueChange={(v) => setDateRange((v as DateRange) || "all")}
+                  onValueChange={(v) => setDateRange(v as DateRange)}
                 >
                   <SelectTrigger className="w-full sm:w-40">
-                    <SelectValue />
+                    <SelectValue placeholder="Toutes les dates" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="today">Aujourd&apos;hui</SelectItem>
                     <SelectItem value="week">Cette semaine</SelectItem>
-                    <SelectItem value="month">Ce mois</SelectItem>
-                    <SelectItem value="all">Tout</SelectItem>
+                    <SelectItem value="month">Ce mois-ci</SelectItem>
                   </SelectContent>
                 </Select>
 

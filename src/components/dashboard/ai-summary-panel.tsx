@@ -85,9 +85,9 @@ export function AISummaryPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           wilaya: wilaya || undefined,
-          user_id: delegue && delegue !== "all" ? delegue : undefined,
+          user_id: delegue || undefined,
           from: getDateFrom(),
-          type: typeFilter && typeFilter !== "all" ? typeFilter : undefined,
+          type: typeFilter || undefined,
           prompt: question,
         }),
       });
@@ -140,10 +140,9 @@ export function AISummaryPanel() {
           />
           <Select value={delegue} onValueChange={(v) => setDelegue(v ?? "")}>
             <SelectTrigger>
-              <SelectValue placeholder="Délégué" />
+              <SelectValue placeholder="Tous les délégués" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tous les délégués</SelectItem>
               {reps.map((r) => (
                 <SelectItem key={r.id} value={r.id}>
                   {r.first_name} {r.last_name}
@@ -153,23 +152,21 @@ export function AISummaryPanel() {
           </Select>
           <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v ?? "")}>
             <SelectTrigger>
-              <SelectValue placeholder="Type" />
+              <SelectValue placeholder="Tous types" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tous types</SelectItem>
               <SelectItem value="medecin">Médecins</SelectItem>
               <SelectItem value="pharmacien">Pharmaciens</SelectItem>
             </SelectContent>
           </Select>
           <Select value={dateRange} onValueChange={(v) => setDateRange(v ?? "month")}>
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue placeholder="Période" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="today">Aujourd&apos;hui</SelectItem>
-              <SelectItem value="week">Semaine</SelectItem>
-              <SelectItem value="month">Mois</SelectItem>
-              <SelectItem value="all">Tout</SelectItem>
+              <SelectItem value="week">Cette semaine</SelectItem>
+              <SelectItem value="month">Ce mois-ci</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -109,10 +109,9 @@ export default function MedecinsPage() {
           <div className="w-full sm:w-48">
             <Select value={specialty} onValueChange={(v) => setSpecialty(v ?? "")}>
               <SelectTrigger>
-                <SelectValue placeholder="Spécialité" />
+                <SelectValue placeholder="Toutes les spécialités" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Toutes</SelectItem>
                 {SPECIALTIES.map((spec) => (
                   <SelectItem key={spec} value={spec}>
                     {spec}
