@@ -9,15 +9,22 @@ import type { VisitWithDetails } from "@/types";
 interface DoctorVisitTimelineProps {
   doctorId: string;
   refreshKey?: number;
+  /** Hide a specific visit (e.g. the current one in a detail dialog) */
+  excludeVisitId?: string;
 }
 
 export function DoctorVisitTimeline({
   doctorId,
   refreshKey = 0,
+  excludeVisitId,
 }: DoctorVisitTimelineProps) {
-  const [visits, setVisits] = useState<VisitWithDetails[]>([]);
+  const [allVisits, setAllVisits] = useState<VisitWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
+
+  const visits = excludeVisitId
+    ? allVisits.filter((v) => v.id !== excludeVisitId)
+    : allVisits;
 
   const fetchVisits = useCallback(async () => {
     setLoading(true);
@@ -26,9 +33,9 @@ export function DoctorVisitTimeline({
         `/api/visits?doctor_id=${doctorId}&all=true&limit=20`
       );
       const data = await res.json();
-      setVisits(data.data || []);
+      setAllVisits(data.data || []);
     } catch {
-      setVisits([]);
+      setAllVisits([]);
     } finally {
       setLoading(false);
     }

@@ -28,6 +28,7 @@ import {
   CornerDownRight,
   ChevronDown,
 } from "lucide-react";
+import { DoctorVisitTimeline } from "@/components/visits/doctor-visit-timeline";
 import type { VisitWithDetails, VisitComment } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -336,6 +337,12 @@ export function VisitDetailDialog({
               {visit.user?.first_name} {visit.user?.last_name}
             </span>
           </div>
+
+          {/* Historique — all visits to this doctor */}
+          <DoctorVisitTimeline
+            doctorId={visit.doctor_id}
+            excludeVisitId={visit.id}
+          />
 
           {/* Objective (médecin) */}
           {visit.objective && (
