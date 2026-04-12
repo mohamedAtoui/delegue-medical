@@ -160,6 +160,7 @@ export function VisitDetailDialog({
   const [replyText, setReplyText] = useState("");
   const [sendingReply, setSendingReply] = useState(false);
   const [evalOpen, setEvalOpen] = useState(false);
+  const [compteRenduOpen, setCompteRenduOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const replyInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -347,14 +348,47 @@ export function VisitDetailDialog({
             </div>
           )}
 
-          {/* Compte rendu / Commentaire */}
+          {/* Compte rendu / Commentaire — collapsible if long */}
           {visit.compte_rendu && (
-            <div className="rounded-lg border border-border p-3 bg-muted/20">
-              <div className="flex items-center gap-2 text-xs font-semibold text-foreground/80 mb-1">
-                <FileText className="h-3.5 w-3.5" />
-                {isPharm ? "Commentaire" : "Compte rendu"}
-              </div>
-              <p className="text-sm whitespace-pre-wrap">{visit.compte_rendu}</p>
+            <div className="rounded-lg border border-border bg-muted/20 overflow-hidden">
+              {visit.compte_rendu.length > 120 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setCompteRenduOpen((v) => !v)}
+                    className="w-full flex items-center justify-between p-3 cursor-pointer hover:bg-muted/30 transition-colors"
+                  >
+                    <span className="flex items-center gap-2 text-xs font-semibold text-foreground/80">
+                      <FileText className="h-3.5 w-3.5" />
+                      {isPharm ? "Commentaire" : "Compte rendu"}
+                    </span>
+                    <ChevronDown
+                      className={cn(
+                        "h-4 w-4 text-muted-foreground transition-transform",
+                        compteRenduOpen && "rotate-180"
+                      )}
+                    />
+                  </button>
+                  {!compteRenduOpen && (
+                    <p className="px-3 pb-3 text-sm text-foreground/80 line-clamp-1">
+                      {visit.compte_rendu}
+                    </p>
+                  )}
+                  {compteRenduOpen && (
+                    <p className="px-3 pb-3 text-sm whitespace-pre-wrap border-t border-border/50 pt-2">
+                      {visit.compte_rendu}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="p-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-foreground/80 mb-1">
+                    <FileText className="h-3.5 w-3.5" />
+                    {isPharm ? "Commentaire" : "Compte rendu"}
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap">{visit.compte_rendu}</p>
+                </div>
+              )}
             </div>
           )}
 
