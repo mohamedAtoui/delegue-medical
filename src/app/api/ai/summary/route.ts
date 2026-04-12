@@ -20,11 +20,13 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createClient();
 
+  const doctorJoin = wilaya
+    ? "doctor:doctors!inner(first_name, last_name, wilaya, specialty, doctor_type)"
+    : "doctor:doctors(first_name, last_name, wilaya, specialty, doctor_type)";
+
   let query = supabase
     .from("visits")
-    .select(
-      "*, doctor:doctors(first_name, last_name, wilaya, specialty, doctor_type), user:users(first_name, last_name)"
-    )
+    .select(`*, ${doctorJoin}, user:users(first_name, last_name)`)
     .order("created_at", { ascending: false })
     .limit(100);
 
@@ -32,6 +34,7 @@ export async function POST(request: NextRequest) {
   if (from) query = query.gte("created_at", from);
   if (to) query = query.lte("created_at", to);
   if (type === "medecin" || type === "pharmacien") query = query.eq("visit_type", type);
+  if (wilaya) query = query.eq("doctor.wilaya", wilaya);
 
   const { data: visits, error } = await query;
 
@@ -40,10 +43,7 @@ export async function POST(request: NextRequest) {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let filteredVisits = (visits || []) as any[];
-  if (wilaya) {
-    filteredVisits = filteredVisits.filter((v) => v.doctor?.wilaya === wilaya);
-  }
+  const filteredVisits = (visits || []) as any[];
 
   if (filteredVisits.length === 0) {
     return NextResponse.json({

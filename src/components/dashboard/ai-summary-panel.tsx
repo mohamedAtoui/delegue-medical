@@ -135,6 +135,8 @@ export function AISummaryPanel() {
             value={wilaya}
             onValueChange={setWilaya}
             placeholder="Wilaya"
+            showAll
+            allLabel="Toutes"
           />
           <Select value={delegue} onValueChange={(v) => setDelegue(v ?? "")}>
             <SelectTrigger>

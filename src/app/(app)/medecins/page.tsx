@@ -34,7 +34,7 @@ export default function MedecinsPage() {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (wilaya) params.set("wilaya", wilaya);
-      if (specialty) params.set("specialty", specialty);
+      if (specialty && specialty !== "all") params.set("specialty", specialty);
       if (typeFilter !== "all") params.set("type", typeFilter);
 
       const res = await fetch(`/api/doctors?${params}`);
@@ -127,6 +127,7 @@ export default function MedecinsPage() {
             value={wilaya}
             onValueChange={setWilaya}
             placeholder="Toutes les wilayas"
+            showAll
           />
         </div>
       </div>
