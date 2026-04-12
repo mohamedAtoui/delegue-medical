@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DoctorVisitGroup } from "@/components/visits/visit-card";
+import { VisitEntry } from "@/components/visits/visit-entry";
 import { VisitDetailDialog } from "@/components/visits/visit-detail-dialog";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { WILAYAS } from "@/lib/constants/wilayas";
@@ -518,33 +519,13 @@ export default function DeleguesPage() {
                       </h3>
                       <div className="space-y-2 ml-6">
                         {groupVisits.map((v) => (
-                          <Card
+                          <VisitEntry
                             key={v.id}
-                            className="p-3 cursor-pointer hover:bg-muted/30"
-                            onClick={() => setSelectedVisit(v)}
-                          >
-                            <div className="flex items-center justify-between text-sm flex-wrap gap-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">
-                                  {v.doctor?.doctor_type === "pharmacien" ? "" : "Dr. "}
-                                  {v.doctor?.last_name} {v.doctor?.first_name}
-                                </span>
-                                {v.doctor?.specialty && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    {v.doctor.specialty}
-                                  </Badge>
-                                )}
-                              </div>
-                              <span className="text-xs text-muted-foreground">
-                                {format(new Date(v.created_at), "HH:mm", { locale: fr })}
-                              </span>
-                            </div>
-                            {v.compte_rendu && (
-                              <p className="text-sm text-foreground/80 mt-2 bg-muted/30 rounded p-2 line-clamp-2">
-                                {v.compte_rendu}
-                              </p>
-                            )}
-                          </Card>
+                            visit={v}
+                            showUser
+                            highlightUserId={selectedRep?.id}
+                            onClick={(visit) => setSelectedVisit(visit)}
+                          />
                         ))}
                       </div>
                     </div>
