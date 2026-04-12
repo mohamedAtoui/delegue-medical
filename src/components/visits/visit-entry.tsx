@@ -12,6 +12,9 @@ import {
   Target,
   MessageSquare,
   CornerDownRight,
+  Stethoscope,
+  Pill,
+  MapPin,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/shared/user-avatar";
@@ -180,6 +183,8 @@ export interface VisitEntryProps {
   visit: VisitWithDetails;
   /** Show the author avatar + name */
   showUser?: boolean;
+  /** Show doctor/pharmacien name + type icon in header */
+  showDoctor?: boolean;
   /** Highlight visits by this user (green) */
   highlightUserId?: string;
   /** Called when the user clicks the entry */
@@ -189,6 +194,7 @@ export interface VisitEntryProps {
 export function VisitEntry({
   visit,
   showUser = true,
+  showDoctor = false,
   highlightUserId,
   onClick,
 }: VisitEntryProps) {
@@ -236,6 +242,20 @@ export function VisitEntry({
         onClick={handleClick}
         className="w-full flex items-start gap-3 p-3 text-left cursor-pointer hover:bg-muted/20 transition-colors"
       >
+        {showDoctor && !showUser && (
+          <div
+            className={cn(
+              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full mt-0.5",
+              isPharm ? "bg-accent/10" : "bg-primary/10"
+            )}
+          >
+            {isPharm ? (
+              <Pill className="h-4 w-4 text-accent" />
+            ) : (
+              <Stethoscope className="h-4 w-4 text-primary" />
+            )}
+          </div>
+        )}
         {showUser && (
           <UserAvatar
             firstName={visit.user?.first_name}
@@ -245,6 +265,43 @@ export function VisitEntry({
           />
         )}
         <div className="flex-1 min-w-0">
+          {/* Doctor info line */}
+          {showDoctor && visit.doctor && (
+            <div className="flex items-center gap-2 mb-0.5">
+              {showUser && (
+                <div
+                  className={cn(
+                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
+                    isPharm ? "bg-accent/10" : "bg-primary/10"
+                  )}
+                >
+                  {isPharm ? (
+                    <Pill className="h-3 w-3 text-accent" />
+                  ) : (
+                    <Stethoscope className="h-3 w-3 text-primary" />
+                  )}
+                </div>
+              )}
+              <span className="text-sm font-semibold truncate">
+                {isPharm ? "" : "Dr. "}
+                {visit.doctor.last_name} {visit.doctor.first_name}
+              </span>
+              {visit.doctor.specialty && (
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] px-1.5 py-0 h-4 shrink-0"
+                >
+                  {visit.doctor.specialty}
+                </Badge>
+              )}
+              {visit.doctor.wilaya && (
+                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground shrink-0">
+                  <MapPin className="h-2.5 w-2.5" />
+                  {visit.doctor.wilaya}
+                </span>
+              )}
+            </div>
+          )}
           <div className="flex items-center justify-between gap-2">
             {showUser && (
               <span

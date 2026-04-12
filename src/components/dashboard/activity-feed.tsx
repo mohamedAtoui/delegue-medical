@@ -71,6 +71,7 @@ export function ActivityFeed() {
                   key={visit.id}
                   visit={visit}
                   showUser
+                  showDoctor
                 />
               ))}
             </div>
