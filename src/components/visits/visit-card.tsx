@@ -216,7 +216,7 @@ export function DoctorVisitGroup({
   );
 }
 
-function InlineComments({
+export function InlineComments({
   visitId,
   visitAuthorId,
 }: {

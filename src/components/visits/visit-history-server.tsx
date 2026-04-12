@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, MessageSquare, Target, FileText } from "lucide-react";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { VisitDetailDialog } from "./visit-detail-dialog";
+import { InlineComments } from "./visit-card";
 import type { VisitWithDetails } from "@/types";
 
 interface VisitHistoryServerProps {
@@ -89,6 +90,9 @@ export function VisitHistoryServer({
                   Visite sans compte rendu
                 </p>
               )}
+
+              {/* Inline comment preview */}
+              <InlineComments visitId={visit.id} visitAuthorId={visit.user_id} />
             </div>
           </div>
         ))}
