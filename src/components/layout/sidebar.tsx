@@ -7,6 +7,7 @@ import {
   Stethoscope,
   LayoutDashboard,
   Users,
+  CalendarCheck,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,7 @@ import type { UserRole } from "@/types";
 const allNavItems = [
   { href: "/visites", label: "Visites", icon: ClipboardList, roles: ["delegue", "superviseur"] },
   { href: "/medecins", label: "Médecins", icon: Stethoscope, roles: ["delegue", "superviseur"] },
+  { href: "/planification", label: "Planification", icon: CalendarCheck, roles: ["delegue"] },
   { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard, roles: ["superviseur"] },
   { href: "/delegues", label: "Délégués", icon: Users, roles: ["superviseur"] },
 ];

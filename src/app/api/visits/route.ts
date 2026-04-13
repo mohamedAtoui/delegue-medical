@@ -173,5 +173,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Auto-complete pending assignments for this doctor
+  if (data) {
+    const { data: pendingAssignments } = await supabase
+      .from("visit_assignments")
+      .select("id")
+      .eq("assignee_id", currentUser.id)
+      .eq("doctor_id", doctor_id)
+      .eq("status", "pending")
+      .order("deadline", { ascending: true })
+      .limit(1);
+
+    if (pendingAssignments && pendingAssignments.length > 0) {
+      await supabase
+        .from("visit_assignments")
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+          visit_id: data.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", pendingAssignments[0].id);
+    }
+  }
+
   return NextResponse.json(data, { status: 201 });
 }

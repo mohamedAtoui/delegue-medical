@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DoctorVisitGroup } from "@/components/visits/visit-card";
 import { VisitEntry } from "@/components/visits/visit-entry";
 import { VisitDetailDialog } from "@/components/visits/visit-detail-dialog";
+import { AssignmentList } from "@/components/assignments/assignment-list";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { WILAYAS } from "@/lib/constants/wilayas";
 import { toast } from "sonner";
@@ -34,6 +35,7 @@ import {
   Clock,
   Save,
   Pencil,
+  CalendarCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { User as UserType, VisitWithDetails, DoctorType } from "@/types";
@@ -58,6 +60,9 @@ export default function DeleguesPage() {
   const [editingWilayas, setEditingWilayas] = useState(false);
   const [editWilayas, setEditWilayas] = useState<string[]>([]);
   const [savingWilayas, setSavingWilayas] = useState(false);
+
+  // View tab (visites vs planification)
+  const [viewTab, setViewTab] = useState<"visites" | "planification">("visites");
 
   // Visit detail
   const [selectedVisit, setSelectedVisit] = useState<VisitWithDetails | null>(null);
@@ -389,6 +394,40 @@ export default function DeleguesPage() {
                 </CardContent>
               </Card>
 
+              {/* Main view toggle: Visites / Planification */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-muted/40 rounded-lg">
+                {([
+                  { key: "visites" as const, label: "Visites", icon: ClipboardList },
+                  { key: "planification" as const, label: "Planification", icon: CalendarCheck },
+                ]).map((tab) => {
+                  const TabIcon = tab.icon;
+                  const active = viewTab === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      onClick={() => setViewTab(tab.key)}
+                      className={cn(
+                        "flex items-center justify-center gap-2 rounded-md py-2.5 text-sm font-medium transition-all cursor-pointer",
+                        active
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <TabIcon className="h-4 w-4" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Planification tab content */}
+              {viewTab === "planification" && (
+                <AssignmentList assigneeId={selectedRep.id} />
+              )}
+
+              {/* Visites tab content */}
+              {viewTab === "visites" && (<>
+
               {/* Type tabs */}
               <div className="grid grid-cols-3 gap-2 p-1 bg-muted/40 rounded-lg">
                 {([
@@ -532,6 +571,8 @@ export default function DeleguesPage() {
                   ))}
                 </div>
               )}
+
+              </>)}
             </>
           ) : (
             <div className="text-center py-20">

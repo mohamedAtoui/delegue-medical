@@ -100,3 +100,25 @@ export interface TerritoryAssignment {
   assigned_by: string | null;
   created_at: string;
 }
+
+export type AssignmentStatus = "pending" | "completed" | "overdue";
+
+export interface VisitAssignment {
+  id: string;
+  assignee_id: string;
+  doctor_id: string;
+  assigned_by: string;
+  status: AssignmentStatus;
+  deadline: string;
+  note: string | null;
+  completed_at: string | null;
+  visit_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VisitAssignmentWithDetails extends VisitAssignment {
+  doctor: Doctor;
+  assignee: Pick<User, "id" | "first_name" | "last_name" | "avatar_url">;
+  assigner: Pick<User, "id" | "first_name" | "last_name" | "avatar_url">;
+}
