@@ -1,10 +1,33 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Search, Plus, Stethoscope, Pill, Users } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Stethoscope,
+  Pill,
+  Users,
+  MapPin,
+  Phone,
+  Star,
+  Clock,
+  ChevronDown,
+  Pencil,
+  Navigation,
+  Mail,
+  Truck,
+} from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -12,11 +35,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DoctorCard } from "@/components/doctors/doctor-card";
+import { DoctorForm } from "@/components/doctors/doctor-form";
+import { VisitEntry } from "@/components/visits/visit-entry";
 import { WilayaSelect } from "@/components/shared/wilaya-select";
 import { SPECIALTIES } from "@/lib/constants/specialties";
 import { cn } from "@/lib/utils";
-import type { Doctor, DoctorType } from "@/types";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import type { Doctor, DoctorType, VisitWithDetails } from "@/types";
 
 type TypeFilter = "all" | DoctorType;
 
@@ -27,6 +53,12 @@ export default function MedecinsPage() {
   const [specialty, setSpecialty] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [loading, setLoading] = useState(true);
+
+  // Inline expand
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedVisits, setExpandedVisits] = useState<VisitWithDetails[]>([]);
+  const [visitsLoading, setVisitsLoading] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
 
   const fetchDoctors = useCallback(async () => {
     setLoading(true);
@@ -49,6 +81,25 @@ export default function MedecinsPage() {
     const timeout = setTimeout(fetchDoctors, 300);
     return () => clearTimeout(timeout);
   }, [fetchDoctors]);
+
+  const toggleDoctor = async (doctorId: string) => {
+    if (expandedId === doctorId) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(doctorId);
+    setExpandedVisits([]);
+    setVisitsLoading(true);
+    try {
+      const res = await fetch(`/api/visits?doctor_id=${doctorId}&all=true&limit=50`);
+      const data = await res.json();
+      setExpandedVisits(data.data || []);
+    } finally {
+      setVisitsLoading(false);
+    }
+  };
+
+  const expandedDoctor = expandedId ? doctors.find((d) => d.id === expandedId) || null : null;
 
   return (
     <div className="space-y-6">
@@ -144,12 +195,225 @@ export default function MedecinsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {doctors.map((doctor) => (
-            <Link key={doctor.id} href={`/medecins/${doctor.id}`} className="block cursor-pointer">
-              <DoctorCard doctor={doctor} onClick={() => {}} />
-            </Link>
-          ))}
+          {doctors.map((doctor) => {
+            const isExpanded = expandedId === doctor.id;
+            const isPharm = doctor.doctor_type === "pharmacien";
+            const Icon = isPharm ? Pill : Stethoscope;
+            const iconBg = isPharm ? "bg-accent/10" : "bg-primary/10";
+            const iconColor = isPharm ? "text-accent" : "text-primary";
+            const phoneDisplay = doctor.phone_mobile || doctor.phone_fixe || (doctor as unknown as Record<string, string>).phone;
+
+            return (
+              <Card
+                key={doctor.id}
+                className={cn(
+                  "cursor-pointer hover:shadow-md transition-all",
+                  isExpanded && "ring-1 ring-primary/20"
+                )}
+              >
+                <CardContent className="p-4">
+                  {/* Header — clickable to toggle */}
+                  <div
+                    className="flex items-center justify-between gap-3"
+                    onClick={() => toggleDoctor(doctor.id)}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${iconBg}`}>
+                        <Icon className={`h-5 w-5 ${iconColor}`} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-sm">
+                            {isPharm ? "" : "Dr. "}
+                            {doctor.last_name} {doctor.first_name}
+                          </span>
+                          <Badge variant="outline" className="text-xs">
+                            {isPharm ? "Pharmacien" : "Médecin"}
+                          </Badge>
+                          {doctor.specialty && !isPharm && (
+                            <Badge variant="secondary" className="text-xs">
+                              {doctor.specialty}
+                            </Badge>
+                          )}
+                          {doctor.potentiel && (
+                            <Badge
+                              className={`text-xs ${
+                                doctor.potentiel === "A"
+                                  ? "bg-green-100 text-green-700 hover:bg-green-100"
+                                  : doctor.potentiel === "B"
+                                  ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-100"
+                                  : "bg-red-100 text-red-700 hover:bg-red-100"
+                              }`}
+                            >
+                              Potentiel {doctor.potentiel}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <MapPin className="h-3 w-3" />
+                            {doctor.wilaya}
+                          </span>
+                          {phoneDisplay && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Phone className="h-3 w-3" />
+                              {phoneDisplay}
+                            </span>
+                          )}
+                          {doctor.engagement != null && doctor.engagement > 0 && (
+                            <span className="flex items-center gap-0.5">
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star
+                                  key={s}
+                                  className={`h-3 w-3 ${
+                                    s <= doctor.engagement!
+                                      ? "fill-yellow-400 text-yellow-400"
+                                      : "text-muted-foreground/20"
+                                  }`}
+                                />
+                              ))}
+                            </span>
+                          )}
+                          {doctor.last_visited_at && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Clock className="h-3 w-3" />
+                              {format(new Date(doctor.last_visited_at), "d MMM yyyy", { locale: fr })}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronDown
+                      className={cn(
+                        "h-5 w-5 shrink-0 text-muted-foreground transition-transform",
+                        isExpanded && "rotate-180"
+                      )}
+                    />
+                  </div>
+
+                  {/* Expanded content */}
+                  {isExpanded && (
+                    <div
+                      className="mt-4 pt-3 border-t border-border/50 space-y-4"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* Doctor details */}
+                      <div className="space-y-1.5 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4" />
+                          {doctor.wilaya}
+                          {doctor.address && ` — ${doctor.address}`}
+                        </div>
+                        {doctor.phone_fixe && (
+                          <div className="flex items-center gap-2">
+                            <Phone className="h-4 w-4" />
+                            <span className="font-medium text-foreground/80">Fixe :</span> {doctor.phone_fixe}
+                          </div>
+                        )}
+                        {doctor.phone_mobile && (
+                          <div className="flex items-center gap-2">
+                            <Phone className="h-4 w-4" />
+                            <span className="font-medium text-foreground/80">Portable :</span> {doctor.phone_mobile}
+                          </div>
+                        )}
+                        {doctor.email && (
+                          <div className="flex items-center gap-2">
+                            <Mail className="h-4 w-4" />
+                            {doctor.email}
+                          </div>
+                        )}
+                        {doctor.google_maps_url && (
+                          <a
+                            href={doctor.google_maps_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-primary hover:underline"
+                          >
+                            <Navigation className="h-4 w-4" />
+                            Voir sur Google Maps
+                          </a>
+                        )}
+                        {isPharm && (doctor.grossiste_pharma || doctor.grossiste_para_pharm) && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Truck className="h-4 w-4" />
+                            {doctor.grossiste_pharma && (
+                              <Badge variant="outline" className="text-xs">
+                                Pharma : {doctor.grossiste_pharma}
+                              </Badge>
+                            )}
+                            {doctor.grossiste_para_pharm && (
+                              <Badge variant="outline" className="text-xs">
+                                Para-pharm : {doctor.grossiste_para_pharm}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowEdit(true)}
+                        className="cursor-pointer"
+                      >
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Modifier
+                      </Button>
+
+                      {/* Visit history */}
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-foreground/80">
+                          Historique des visites
+                          {!visitsLoading && ` (${expandedVisits.length})`}
+                        </p>
+                        {visitsLoading ? (
+                          <div className="space-y-2">
+                            {[1, 2].map((i) => (
+                              <div key={i} className="h-14 rounded-lg bg-muted/50 animate-pulse" />
+                            ))}
+                          </div>
+                        ) : expandedVisits.length === 0 ? (
+                          <p className="text-xs text-muted-foreground py-3 text-center">
+                            Aucune visite enregistrée
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {expandedVisits.map((visit) => (
+                              <VisitEntry key={visit.id} visit={visit} showUser />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
+      )}
+
+      {/* Edit dialog */}
+      {expandedDoctor && (
+        <Dialog open={showEdit} onOpenChange={setShowEdit}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                Modifier {expandedDoctor.doctor_type === "pharmacien" ? "le pharmacien" : "le médecin"}
+              </DialogTitle>
+            </DialogHeader>
+            <DoctorForm
+              initialData={expandedDoctor}
+              onSuccess={(updated) => {
+                setDoctors((prev) =>
+                  prev.map((d) => (d.id === updated.id ? updated : d))
+                );
+                setShowEdit(false);
+              }}
+              onCancel={() => setShowEdit(false)}
+            />
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
