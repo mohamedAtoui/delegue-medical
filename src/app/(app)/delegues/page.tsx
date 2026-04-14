@@ -17,7 +17,6 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DoctorVisitGroup } from "@/components/visits/visit-card";
 import { VisitEntry } from "@/components/visits/visit-entry";
-import { VisitDetailDialog } from "@/components/visits/visit-detail-dialog";
 import { AssignmentList } from "@/components/assignments/assignment-list";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { WILAYAS } from "@/lib/constants/wilayas";
@@ -64,8 +63,7 @@ export default function DeleguesPage() {
   // View tab (visites vs planification)
   const [viewTab, setViewTab] = useState<"visites" | "planification">("visites");
 
-  // Visit detail
-  const [selectedVisit, setSelectedVisit] = useState<VisitWithDetails | null>(null);
+  // (dialog removed — visits expand inline now)
 
   useEffect(() => {
     fetch("/api/users?role=delegue")
@@ -532,7 +530,6 @@ export default function DeleguesPage() {
                       doctorType={group.doctorType}
                       showUser
                       highlightUserId={selectedRep?.id}
-                      onVisitClick={(v) => setSelectedVisit(v)}
                     />
                   ))}
                 </div>
@@ -563,7 +560,6 @@ export default function DeleguesPage() {
                             visit={v}
                             showUser
                             highlightUserId={selectedRep?.id}
-                            onClick={(visit) => setSelectedVisit(visit)}
                           />
                         ))}
                       </div>
@@ -626,18 +622,6 @@ export default function DeleguesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Visit detail dialog */}
-      <VisitDetailDialog
-        visit={selectedVisit}
-        open={!!selectedVisit}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelectedVisit(null);
-            // refresh comment counts
-            if (selectedRep) fetchVisits(selectedRep.id);
-          }
-        }}
-      />
     </div>
   );
 }

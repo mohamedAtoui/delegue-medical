@@ -16,9 +16,10 @@ import {
 import { DoctorSearch } from "@/components/doctors/doctor-search";
 import { DoctorForm } from "@/components/doctors/doctor-form";
 import { DoctorVisitTimeline } from "@/components/visits/doctor-visit-timeline";
+import { DeadlineSelect } from "@/components/assignments/deadline-select";
 import { YesNoToggle } from "@/components/visits/yes-no-toggle";
 import { toast } from "sonner";
-import { Send, Stethoscope, Pill } from "lucide-react";
+import { Send, Stethoscope, Pill, CalendarCheck, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Doctor, VisitType } from "@/types";
 
@@ -81,6 +82,13 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
   const [pharmacienForm, setPharmacienForm] = useState<PharmacienForm>(emptyPharmacien);
   const [loading, setLoading] = useState(false);
   const [showDoctorForm, setShowDoctorForm] = useState(false);
+
+  // Next visit planning (shown after successful submit)
+  const [showNextPlan, setShowNextPlan] = useState(false);
+  const [nextPlanDoctor, setNextPlanDoctor] = useState<Doctor | null>(null);
+  const [nextDeadline, setNextDeadline] = useState("");
+  const [nextNote, setNextNote] = useState("");
+  const [savingNext, setSavingNext] = useState(false);
 
   const switchType = (t: VisitType) => {
     if (t === visitType) return;
@@ -167,9 +175,16 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
       }
 
       toast.success("Visite enregistrée");
+      // Save doctor ref for next-visit planning, then reset form
+      const savedDoctor = doctor;
       setDoctor(null);
       setMedecinForm(emptyMedecin);
       setPharmacienForm(emptyPharmacien);
+      // Show next visit planner
+      setNextPlanDoctor(savedDoctor);
+      setNextDeadline("");
+      setNextNote("");
+      setShowNextPlan(true);
       onSuccess();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
@@ -435,6 +450,97 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
           )}
         </Button>
       </form>
+
+      {/* Next visit planning prompt */}
+      {showNextPlan && nextPlanDoctor && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-4 space-y-3">
+            <button
+              type="button"
+              onClick={() => setShowNextPlan(false)}
+              className="w-full flex items-center justify-between cursor-pointer"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <CalendarCheck className="h-4 w-4 text-primary" />
+                Planifier la prochaine visite pour{" "}
+                {nextPlanDoctor.doctor_type === "pharmacien" ? "" : "Dr. "}
+                {nextPlanDoctor.last_name} {nextPlanDoctor.first_name} ?
+              </span>
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 text-muted-foreground transition-transform",
+                )}
+              />
+            </button>
+
+            <DeadlineSelect value={nextDeadline} onChange={setNextDeadline} />
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-foreground/80">
+                Note (optionnel)
+              </label>
+              <Textarea
+                value={nextNote}
+                onChange={(e) => setNextNote(e.target.value)}
+                placeholder="Rappel ou objectif pour la prochaine visite..."
+                className="min-h-[50px] resize-none text-sm"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                disabled={savingNext || !nextDeadline}
+                className="flex-1 cursor-pointer"
+                onClick={async () => {
+                  setSavingNext(true);
+                  try {
+                    const res = await fetch("/api/assignments", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        assignee_id: "self",
+                        doctor_id: nextPlanDoctor.id,
+                        deadline: nextDeadline,
+                        note: nextNote || null,
+                      }),
+                    });
+                    if (!res.ok) {
+                      // If "self" doesn't work, the API needs current user ID
+                      // but delegue can only assign to self so the API will handle it
+                      const err = await res.json();
+                      throw new Error(err.error);
+                    }
+                    toast.success("Prochaine visite planifiée");
+                    setShowNextPlan(false);
+                    setNextPlanDoctor(null);
+                  } catch (err) {
+                    toast.error(
+                      err instanceof Error ? err.message : "Erreur"
+                    );
+                  } finally {
+                    setSavingNext(false);
+                  }
+                }}
+              >
+                <CalendarCheck className="h-4 w-4 mr-1" />
+                {savingNext ? "Enregistrement..." : "Planifier"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setShowNextPlan(false);
+                  setNextPlanDoctor(null);
+                }}
+                className="cursor-pointer text-muted-foreground"
+              >
+                Passer
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Dialog open={showDoctorForm} onOpenChange={setShowDoctorForm}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">

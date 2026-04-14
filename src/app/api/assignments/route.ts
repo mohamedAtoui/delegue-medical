@@ -85,11 +85,15 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { assignee_id, doctor_id, deadline, note } = body;
+  const { doctor_id, deadline, note } = body;
+  // Allow "self" or missing assignee_id for delegue self-assignment
+  const assignee_id = body.assignee_id === "self" || !body.assignee_id
+    ? currentUser.id
+    : body.assignee_id;
 
-  if (!assignee_id || !doctor_id || !deadline) {
+  if (!doctor_id || !deadline) {
     return NextResponse.json(
-      { error: "Délégué, médecin/pharmacien et date limite sont requis" },
+      { error: "Médecin/pharmacien et date limite sont requis" },
       { status: 400 }
     );
   }

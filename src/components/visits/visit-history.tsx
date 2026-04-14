@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { DoctorVisitGroup } from "./visit-card";
-import { VisitDetailDialog } from "./visit-detail-dialog";
 import { Button } from "@/components/ui/button";
 import type { VisitWithDetails, DoctorType } from "@/types";
 
@@ -40,7 +39,6 @@ export function VisitHistory({
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [selectedVisit, setSelectedVisit] = useState<VisitWithDetails | null>(null);
 
   const fetchVisits = useCallback(async () => {
     setLoading(true);
@@ -93,18 +91,6 @@ export function VisitHistory({
     fetchVisits();
   }, [fetchVisits, refreshKey]);
 
-  const handleVisitClick = async (visit: VisitWithDetails) => {
-    setSelectedVisit(visit);
-  };
-
-  const handleDialogClose = (open: boolean) => {
-    if (!open) {
-      setSelectedVisit(null);
-      // refresh to update comment counts
-      fetchVisits();
-    }
-  };
-
   if (loading && groups.length === 0) {
     return (
       <div className="space-y-3">
@@ -124,39 +110,30 @@ export function VisitHistory({
   }
 
   return (
-    <>
-      <div className="space-y-3">
-        {groups.map((group) => (
-          <DoctorVisitGroup
-            key={group.doctorId}
-            doctorName={group.doctorName}
-            specialty={group.specialty}
-            wilaya={group.wilaya}
-            visits={group.visits}
-            doctorType={group.doctorType}
-            showUser={showUser}
-            onVisitClick={handleVisitClick}
-          />
-        ))}
+    <div className="space-y-3">
+      {groups.map((group) => (
+        <DoctorVisitGroup
+          key={group.doctorId}
+          doctorName={group.doctorName}
+          specialty={group.specialty}
+          wilaya={group.wilaya}
+          visits={group.visits}
+          doctorType={group.doctorType}
+          showUser={showUser}
+        />
+      ))}
 
-        {total > page * 50 && (
-          <div className="flex justify-center pt-4">
-            <Button
-              variant="outline"
-              onClick={() => setPage((p) => p + 1)}
-              className="cursor-pointer"
-            >
-              Voir plus
-            </Button>
-          </div>
-        )}
-      </div>
-
-      <VisitDetailDialog
-        visit={selectedVisit}
-        open={!!selectedVisit}
-        onOpenChange={handleDialogClose}
-      />
-    </>
+      {total > page * 50 && (
+        <div className="flex justify-center pt-4">
+          <Button
+            variant="outline"
+            onClick={() => setPage((p) => p + 1)}
+            className="cursor-pointer"
+          >
+            Voir plus
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }

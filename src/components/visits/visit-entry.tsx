@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
@@ -15,9 +15,13 @@ import {
   Stethoscope,
   Pill,
   MapPin,
+  Send,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/shared/user-avatar";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { VisitWithDetails, VisitComment } from "@/types";
 
@@ -36,7 +40,7 @@ function MiniYesNo({ value, label }: { value: boolean | null; label: string }) {
   );
 }
 
-/* ─── Inline comments (threaded) ─── */
+/* ─── Inline comments (threaded) + comment input ─── */
 export function InlineComments({
   visitId,
   visitAuthorId,
@@ -46,6 +50,10 @@ export function InlineComments({
 }) {
   const [comments, setComments] = useState<VisitComment[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [newComment, setNewComment] = useState("");
+  const [sending, setSending] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const fetchComments = useCallback(async () => {
     try {
@@ -63,7 +71,28 @@ export function InlineComments({
     fetchComments();
   }, [fetchComments]);
 
-  if (!loaded || comments.length === 0) return null;
+  const submitComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/visits/${visitId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: newComment.trim() }),
+      });
+      if (!res.ok) throw new Error("Erreur");
+      const created = await res.json();
+      setComments((prev) => [...prev, created]);
+      setNewComment("");
+    } catch {
+      toast.error("Erreur lors de l'envoi");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (!loaded) return null;
 
   const roots = comments.filter((c) => !c.parent_id);
   const replyMap = new Map<string, VisitComment[]>();
@@ -74,17 +103,24 @@ export function InlineComments({
     }
   });
 
-  const shown = roots.slice(-3);
+  const shown = showAll ? roots : roots.slice(-3);
 
   return (
     <div className="mt-2 space-y-1.5" onClick={(e) => e.stopPropagation()}>
-      {roots.length > 3 && (
-        <p className="text-[10px] text-muted-foreground/70 ml-1">
-          +{roots.length - 3} commentaire
+      {/* Show all toggle */}
+      {!showAll && roots.length > 3 && (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="text-[10px] text-primary/70 hover:text-primary ml-1 cursor-pointer"
+        >
+          Voir les {roots.length - 3} commentaire
           {roots.length - 3 > 1 ? "s" : ""} précédent
           {roots.length - 3 > 1 ? "s" : ""}
-        </p>
+        </button>
       )}
+
+      {/* Comments */}
       {shown.map((c) => {
         const isAuthor = c.user_id === visitAuthorId;
         const replies = replyMap.get(c.id) || [];
@@ -115,7 +151,7 @@ export function InlineComments({
                 </div>
                 <p
                   className={cn(
-                    "text-xs leading-relaxed mt-0.5 line-clamp-2",
+                    "text-xs leading-relaxed mt-0.5",
                     isAuthor ? "text-green-800/80" : "text-foreground/70"
                   )}
                 >
@@ -123,7 +159,7 @@ export function InlineComments({
                 </p>
               </div>
             </div>
-            {replies.slice(-2).map((r) => {
+            {replies.map((r) => {
               const rIsAuthor = r.user_id === visitAuthorId;
               return (
                 <div
@@ -155,7 +191,7 @@ export function InlineComments({
                     </div>
                     <p
                       className={cn(
-                        "text-xs leading-relaxed mt-0.5 line-clamp-2",
+                        "text-xs leading-relaxed mt-0.5",
                         rIsAuthor ? "text-green-800/80" : "text-foreground/70"
                       )}
                     >
@@ -165,15 +201,34 @@ export function InlineComments({
                 </div>
               );
             })}
-            {replies.length > 2 && (
-              <p className="text-[9px] text-muted-foreground/60 ml-6 mt-0.5">
-                +{replies.length - 2} réponse
-                {replies.length - 2 > 1 ? "s" : ""}
-              </p>
-            )}
           </div>
         );
       })}
+
+      {/* Inline comment input */}
+      <form onSubmit={submitComment} className="flex gap-1.5 pt-1">
+        <Textarea
+          ref={inputRef}
+          value={newComment}
+          onChange={(e) => setNewComment(e.target.value)}
+          placeholder="Commenter..."
+          disabled={sending}
+          className="flex-1 min-h-[32px] max-h-[80px] resize-none text-xs py-1.5 px-2.5"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              submitComment(e);
+            }
+          }}
+        />
+        <Button
+          type="submit"
+          size="sm"
+          disabled={sending || !newComment.trim()}
+          className="cursor-pointer shrink-0 self-end h-8 w-8 p-0"
+        >
+          <Send className="h-3 w-3" />
+        </Button>
+      </form>
     </div>
   );
 }
@@ -187,7 +242,7 @@ export interface VisitEntryProps {
   showDoctor?: boolean;
   /** Highlight visits by this user (green) */
   highlightUserId?: string;
-  /** Called when the user clicks the entry */
+  /** Called when the user clicks the entry (overrides inline expand) */
   onClick?: (visit: VisitWithDetails) => void;
 }
 
@@ -365,14 +420,12 @@ export function VisitEntry({
           </div>
         </div>
 
-        {!onClick && (
-          <ChevronDown
-            className={cn(
-              "h-4 w-4 text-muted-foreground/50 shrink-0 mt-0.5 transition-transform",
-              open && "rotate-180"
-            )}
-          />
-        )}
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-muted-foreground/50 shrink-0 mt-0.5 transition-transform",
+            open && "rotate-180"
+          )}
+        />
       </button>
 
       {/* Expanded content */}
@@ -474,7 +527,7 @@ export function VisitEntry({
             </div>
           )}
 
-          {/* Comments */}
+          {/* Comments with inline input */}
           <InlineComments visitId={visit.id} visitAuthorId={visit.user_id} />
         </div>
       )}
