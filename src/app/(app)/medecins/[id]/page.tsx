@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DoctorForm } from "@/components/doctors/doctor-form";
-import { VisitHistoryServer } from "@/components/visits/visit-history-server";
+import { DoctorVisitGroup } from "@/components/visits/visit-card";
 import {
   Stethoscope,
   Pill,
@@ -185,16 +185,24 @@ export default function DoctorDetailPage() {
       </Card>
 
       {/* Visit history */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            Historique des visites ({visits.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <VisitHistoryServer visits={visits} showUser />
-        </CardContent>
-      </Card>
+      {visits.length > 0 ? (
+        <DoctorVisitGroup
+          doctorName={`${isPharmacien ? "" : "Dr. "}${doctor.last_name} ${doctor.first_name}`.trim()}
+          specialty={doctor.specialty || null}
+          wilaya={doctor.wilaya || ""}
+          visits={visits}
+          doctorType={doctor.doctor_type as import("@/types").DoctorType}
+          showUser
+        />
+      ) : (
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-center text-muted-foreground py-6">
+              Aucune visite enregistrée
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Edit dialog */}
       <Dialog open={showEdit} onOpenChange={setShowEdit}>

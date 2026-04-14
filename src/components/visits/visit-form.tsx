@@ -83,12 +83,10 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
   const [loading, setLoading] = useState(false);
   const [showDoctorForm, setShowDoctorForm] = useState(false);
 
-  // Next visit planning (shown after successful submit)
-  const [showNextPlan, setShowNextPlan] = useState(false);
-  const [nextPlanDoctor, setNextPlanDoctor] = useState<Doctor | null>(null);
+  // Next visit planning (optional, inside form before submit)
+  const [planNext, setPlanNext] = useState(false);
   const [nextDeadline, setNextDeadline] = useState("");
   const [nextNote, setNextNote] = useState("");
-  const [savingNext, setSavingNext] = useState(false);
 
   const switchType = (t: VisitType) => {
     if (t === visitType) return;
@@ -174,17 +172,40 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
         throw new Error(err.error);
       }
 
-      toast.success("Visite enregistrée");
-      // Save doctor ref for next-visit planning, then reset form
-      const savedDoctor = doctor;
+      // If next visit is planned, create assignment too
+      if (planNext && nextDeadline && doctor) {
+        try {
+          const assignRes = await fetch("/api/assignments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              assignee_id: "self",
+              doctor_id: doctor.id,
+              deadline: nextDeadline,
+              note: nextNote || null,
+            }),
+          });
+          if (assignRes.ok) {
+            toast.success("Visite enregistrée + prochaine visite planifiée");
+          } else {
+            toast.success("Visite enregistrée");
+            toast.error("Erreur lors de la planification de la prochaine visite");
+          }
+        } catch {
+          toast.success("Visite enregistrée");
+          toast.error("Erreur lors de la planification de la prochaine visite");
+        }
+      } else {
+        toast.success("Visite enregistrée");
+      }
+
+      // Reset form
       setDoctor(null);
       setMedecinForm(emptyMedecin);
       setPharmacienForm(emptyPharmacien);
-      // Show next visit planner
-      setNextPlanDoctor(savedDoctor);
+      setPlanNext(false);
       setNextDeadline("");
       setNextNote("");
-      setShowNextPlan(true);
       onSuccess();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
@@ -434,9 +455,65 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
           </div>
         )}
 
+        {/* Optional: Plan next visit (only shows when doctor is selected) */}
+        {doctor && (
+          <>
+            <Separator />
+            <Card className={cn(
+              "transition-all",
+              planNext ? "border-primary/30 bg-primary/5" : "border-border"
+            )}>
+              <CardContent className="p-4 space-y-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlanNext(!planNext);
+                    if (!planNext) {
+                      setNextDeadline("");
+                      setNextNote("");
+                    }
+                  }}
+                  className="w-full flex items-center justify-between cursor-pointer"
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <CalendarCheck className={cn("h-4 w-4", planNext ? "text-primary" : "text-muted-foreground")} />
+                    Planifier la prochaine visite pour{" "}
+                    {doctor.doctor_type === "pharmacien" ? "" : "Dr. "}
+                    {doctor.last_name} {doctor.first_name}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 text-muted-foreground transition-transform",
+                      planNext && "rotate-180"
+                    )}
+                  />
+                </button>
+
+                {planNext && (
+                  <div className="space-y-3 pt-1">
+                    <DeadlineSelect value={nextDeadline} onChange={setNextDeadline} />
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-foreground/80">
+                        Note (optionnel)
+                      </label>
+                      <Textarea
+                        value={nextNote}
+                        onChange={(e) => setNextNote(e.target.value)}
+                        placeholder="Rappel ou objectif pour la prochaine visite..."
+                        className="min-h-[50px] resize-none text-sm"
+                      />
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+
         <Button
           type="submit"
-          disabled={loading || !doctor}
+          disabled={loading || !doctor || (planNext && !nextDeadline)}
           className="w-full cursor-pointer"
           size="lg"
         >
@@ -445,102 +522,11 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
           ) : (
             <>
               <Send className="mr-2 h-4 w-4" />
-              Enregistrer la visite
+              {planNext ? "Enregistrer la visite + planifier la prochaine" : "Enregistrer la visite"}
             </>
           )}
         </Button>
       </form>
-
-      {/* Next visit planning prompt */}
-      {showNextPlan && nextPlanDoctor && (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="p-4 space-y-3">
-            <button
-              type="button"
-              onClick={() => setShowNextPlan(false)}
-              className="w-full flex items-center justify-between cursor-pointer"
-            >
-              <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <CalendarCheck className="h-4 w-4 text-primary" />
-                Planifier la prochaine visite pour{" "}
-                {nextPlanDoctor.doctor_type === "pharmacien" ? "" : "Dr. "}
-                {nextPlanDoctor.last_name} {nextPlanDoctor.first_name} ?
-              </span>
-              <ChevronDown
-                className={cn(
-                  "h-4 w-4 text-muted-foreground transition-transform",
-                )}
-              />
-            </button>
-
-            <DeadlineSelect value={nextDeadline} onChange={setNextDeadline} />
-
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground/80">
-                Note (optionnel)
-              </label>
-              <Textarea
-                value={nextNote}
-                onChange={(e) => setNextNote(e.target.value)}
-                placeholder="Rappel ou objectif pour la prochaine visite..."
-                className="min-h-[50px] resize-none text-sm"
-              />
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                disabled={savingNext || !nextDeadline}
-                className="flex-1 cursor-pointer"
-                onClick={async () => {
-                  setSavingNext(true);
-                  try {
-                    const res = await fetch("/api/assignments", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        assignee_id: "self",
-                        doctor_id: nextPlanDoctor.id,
-                        deadline: nextDeadline,
-                        note: nextNote || null,
-                      }),
-                    });
-                    if (!res.ok) {
-                      // If "self" doesn't work, the API needs current user ID
-                      // but delegue can only assign to self so the API will handle it
-                      const err = await res.json();
-                      throw new Error(err.error);
-                    }
-                    toast.success("Prochaine visite planifiée");
-                    setShowNextPlan(false);
-                    setNextPlanDoctor(null);
-                  } catch (err) {
-                    toast.error(
-                      err instanceof Error ? err.message : "Erreur"
-                    );
-                  } finally {
-                    setSavingNext(false);
-                  }
-                }}
-              >
-                <CalendarCheck className="h-4 w-4 mr-1" />
-                {savingNext ? "Enregistrement..." : "Planifier"}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  setShowNextPlan(false);
-                  setNextPlanDoctor(null);
-                }}
-                className="cursor-pointer text-muted-foreground"
-              >
-                Passer
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <Dialog open={showDoctorForm} onOpenChange={setShowDoctorForm}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
