@@ -4,6 +4,16 @@ import { useState, useEffect, useCallback } from "react";
 import { AssignmentCard } from "./assignment-card";
 import { AssignmentForm } from "./assignment-form";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import {
   Plus,
@@ -33,6 +43,7 @@ export function AssignmentList({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<VisitAssignmentWithDetails | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const fetchAssignments = useCallback(async () => {
     setLoading(true);
@@ -54,9 +65,14 @@ export function AssignmentList({
     fetchAssignments();
   }, [fetchAssignments]);
 
-  const handleDelete = async (id: string) => {
+  const handleDeleteRequest = (id: string) => {
+    setDeleteId(id);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteId) return;
     try {
-      const res = await fetch(`/api/assignments/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/assignments/${deleteId}`, { method: "DELETE" });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error);
@@ -65,6 +81,8 @@ export function AssignmentList({
       fetchAssignments();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur");
+    } finally {
+      setDeleteId(null);
     }
   };
 
@@ -180,7 +198,7 @@ export function AssignmentList({
               assignment={a}
               showAssignee={showAssignee}
               onEdit={a.status !== "completed" ? handleEdit : undefined}
-              onDelete={a.status !== "completed" ? handleDelete : undefined}
+              onDelete={a.status !== "completed" ? handleDeleteRequest : undefined}
             />
           ))}
         </div>
@@ -194,6 +212,27 @@ export function AssignmentList({
         assignment={editing}
         onSuccess={fetchAssignments}
       />
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer cette planification ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est irréversible. La planification sera définitivement supprimée.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="cursor-pointer">Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-red-600 hover:bg-red-700 cursor-pointer"
+            >
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

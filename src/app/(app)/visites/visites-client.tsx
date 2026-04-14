@@ -10,6 +10,7 @@ import {
   Search,
   X,
   SlidersHorizontal,
+  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,7 +29,7 @@ import { cn } from "@/lib/utils";
 import type { DoctorType, User, UserRole } from "@/types";
 
 type TypeFilter = "" | DoctorType;
-type DateRange = "" | "today" | "week" | "month";
+type DateRange = "" | "today" | "week" | "month" | "custom";
 
 interface VisitesClientProps {
   role: UserRole;
@@ -44,6 +45,7 @@ export function VisitesClient({ role }: VisitesClientProps) {
   const [delegueFilter, setDelegueFilter] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [customDate, setCustomDate] = useState("");
   const [reps, setReps] = useState<User[]>([]);
 
   // Debounce search
@@ -63,6 +65,12 @@ export function VisitesClient({ role }: VisitesClientProps) {
 
   const getFrom = (): string | undefined => {
     if (!dateRange) return undefined;
+    if (dateRange === "custom") {
+      if (!customDate) return undefined;
+      const d = new Date(customDate);
+      d.setHours(0, 0, 0, 0);
+      return d.toISOString();
+    }
     const from = new Date();
     if (dateRange === "today") from.setHours(0, 0, 0, 0);
     else if (dateRange === "week") from.setDate(from.getDate() - 7);
@@ -80,6 +88,7 @@ export function VisitesClient({ role }: VisitesClientProps) {
   const resetFilters = () => {
     setTypeFilter("");
     setDateRange("");
+    setCustomDate("");
     setWilayaFilter("");
     setDelegueFilter("");
     setSearchInput("");
@@ -194,13 +203,18 @@ export function VisitesClient({ role }: VisitesClientProps) {
           className={cn(
             "grid gap-2",
             isSupervisor
-              ? "grid-cols-1 sm:grid-cols-3"
+              ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+              : dateRange === "custom"
+              ? "grid-cols-1 sm:grid-cols-2"
               : "grid-cols-1"
           )}
         >
           <Select
             value={dateRange}
-            onValueChange={(v) => setDateRange(v as DateRange)}
+            onValueChange={(v) => {
+              setDateRange(v as DateRange);
+              if (v !== "custom") setCustomDate("");
+            }}
           >
             <SelectTrigger>
               <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground mr-1" />
@@ -210,8 +224,21 @@ export function VisitesClient({ role }: VisitesClientProps) {
               <SelectItem value="today">Aujourd&apos;hui</SelectItem>
               <SelectItem value="week">Cette semaine</SelectItem>
               <SelectItem value="month">Ce mois-ci</SelectItem>
+              <SelectItem value="custom">Date précise…</SelectItem>
             </SelectContent>
           </Select>
+
+          {dateRange === "custom" && (
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                type="date"
+                value={customDate}
+                onChange={(e) => setCustomDate(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          )}
 
           {isSupervisor && (
             <>
