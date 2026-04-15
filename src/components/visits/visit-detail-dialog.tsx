@@ -27,6 +27,7 @@ import {
   FileText,
   CornerDownRight,
   ChevronDown,
+  ImagePlus,
 } from "lucide-react";
 import { DoctorVisitTimeline } from "@/components/visits/doctor-visit-timeline";
 import type { VisitWithDetails, VisitComment } from "@/types";
@@ -127,6 +128,21 @@ function CommentBubble({
           )}
         >
           {comment.content}
+          {comment.image_url && (
+            <a
+              href={comment.image_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn("block", comment.content && "mt-2")}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={comment.image_url}
+                alt="Pièce jointe"
+                className="max-h-64 w-auto rounded-lg border border-border/60 object-contain bg-background"
+              />
+            </a>
+          )}
         </div>
         {!isReply && onReply && (
           <button
@@ -156,14 +172,57 @@ export function VisitDetailDialog({
   const [comments, setComments] = useState<VisitComment[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
   const [newComment, setNewComment] = useState("");
+  const [newImage, setNewImage] = useState<File | null>(null);
+  const [newImagePreview, setNewImagePreview] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [replyTo, setReplyTo] = useState<VisitComment | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [replyImage, setReplyImage] = useState<File | null>(null);
+  const [replyImagePreview, setReplyImagePreview] = useState<string | null>(null);
   const [sendingReply, setSendingReply] = useState(false);
   const [evalOpen, setEvalOpen] = useState(false);
   const [compteRenduOpen, setCompteRenduOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const replyInputRef = useRef<HTMLTextAreaElement>(null);
+  const newImageInputRef = useRef<HTMLInputElement>(null);
+  const replyImageInputRef = useRef<HTMLInputElement>(null);
+
+  const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+  const pickImage = (
+    file: File | null,
+    setFile: (f: File | null) => void,
+    setPreview: (u: string | null) => void
+  ) => {
+    if (!file) {
+      setFile(null);
+      setPreview(null);
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      toast.error("Veuillez choisir une image");
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      toast.error("L'image dépasse 5 Mo");
+      return;
+    }
+    setFile(file);
+    setPreview(URL.createObjectURL(file));
+  };
+
+  // Clean up preview object URLs
+  useEffect(() => {
+    return () => {
+      if (newImagePreview) URL.revokeObjectURL(newImagePreview);
+    };
+  }, [newImagePreview]);
+
+  useEffect(() => {
+    return () => {
+      if (replyImagePreview) URL.revokeObjectURL(replyImagePreview);
+    };
+  }, [replyImagePreview]);
 
   const fetchComments = useCallback(async () => {
     if (!visit) return;
@@ -180,8 +239,12 @@ export function VisitDetailDialog({
   useEffect(() => {
     if (open && visit) {
       setNewComment("");
+      setNewImage(null);
+      setNewImagePreview(null);
       setReplyTo(null);
       setReplyText("");
+      setReplyImage(null);
+      setReplyImagePreview(null);
       fetchComments();
     }
   }, [open, visit, fetchComments]);
@@ -234,14 +297,17 @@ export function VisitDetailDialog({
 
   const submitComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!visit || !newComment.trim()) return;
+    if (!visit) return;
+    if (!newComment.trim() && !newImage) return;
 
     setSending(true);
     try {
+      const fd = new FormData();
+      if (newComment.trim()) fd.append("content", newComment.trim());
+      if (newImage) fd.append("image", newImage);
       const res = await fetch(`/api/visits/${visit.id}/comments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newComment.trim() }),
+        body: fd,
       });
       if (!res.ok) {
         const err = await res.json();
@@ -250,6 +316,10 @@ export function VisitDetailDialog({
       const created: VisitComment = await res.json();
       setComments((prev) => [...prev, created]);
       setNewComment("");
+      setNewImage(null);
+      if (newImagePreview) URL.revokeObjectURL(newImagePreview);
+      setNewImagePreview(null);
+      if (newImageInputRef.current) newImageInputRef.current.value = "";
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur lors de l'envoi");
     } finally {
@@ -259,17 +329,18 @@ export function VisitDetailDialog({
 
   const submitReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!visit || !replyTo || !replyText.trim()) return;
+    if (!visit || !replyTo) return;
+    if (!replyText.trim() && !replyImage) return;
 
     setSendingReply(true);
     try {
+      const fd = new FormData();
+      if (replyText.trim()) fd.append("content", replyText.trim());
+      fd.append("parent_id", replyTo.id);
+      if (replyImage) fd.append("image", replyImage);
       const res = await fetch(`/api/visits/${visit.id}/comments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: replyText.trim(),
-          parent_id: replyTo.id,
-        }),
+        body: fd,
       });
       if (!res.ok) {
         const err = await res.json();
@@ -278,6 +349,10 @@ export function VisitDetailDialog({
       const created: VisitComment = await res.json();
       setComments((prev) => [...prev, created]);
       setReplyText("");
+      setReplyImage(null);
+      if (replyImagePreview) URL.revokeObjectURL(replyImagePreview);
+      setReplyImagePreview(null);
+      if (replyImageInputRef.current) replyImageInputRef.current.value = "";
       setReplyTo(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur lors de l'envoi");
@@ -554,36 +629,100 @@ export function VisitDetailDialog({
                           {isReplying && (
                             <form
                               onSubmit={submitReply}
-                              className="flex gap-2 pt-1"
+                              className="flex flex-col gap-2 pt-1"
                             >
-                              <Textarea
-                                ref={replyInputRef}
-                                value={replyText}
-                                onChange={(e) => setReplyText(e.target.value)}
-                                placeholder={`Répondre à ${c.user?.first_name}…`}
-                                className="flex-1 min-h-[44px] resize-none text-sm"
-                                disabled={sendingReply}
-                                onKeyDown={(e) => {
-                                  if (
-                                    e.key === "Enter" &&
-                                    (e.metaKey || e.ctrlKey)
-                                  ) {
-                                    submitReply(e);
+                              {replyImagePreview && (
+                                <div className="relative w-fit">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={replyImagePreview}
+                                    alt="Aperçu"
+                                    className="max-h-32 w-auto rounded-lg border border-border/60 object-contain"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (replyImagePreview)
+                                        URL.revokeObjectURL(replyImagePreview);
+                                      setReplyImage(null);
+                                      setReplyImagePreview(null);
+                                      if (replyImageInputRef.current)
+                                        replyImageInputRef.current.value = "";
+                                    }}
+                                    className="absolute -top-1.5 -right-1.5 bg-background border border-border rounded-full p-0.5 shadow cursor-pointer hover:bg-muted"
+                                    aria-label="Retirer l'image"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              )}
+                              <div className="flex gap-2">
+                                <Textarea
+                                  ref={replyInputRef}
+                                  value={replyText}
+                                  onChange={(e) =>
+                                    setReplyText(e.target.value)
                                   }
-                                  if (e.key === "Escape") {
-                                    setReplyTo(null);
-                                    setReplyText("");
+                                  placeholder={`Répondre à ${c.user?.first_name}…`}
+                                  className="flex-1 min-h-[44px] resize-none text-sm"
+                                  disabled={sendingReply}
+                                  onKeyDown={(e) => {
+                                    if (
+                                      e.key === "Enter" &&
+                                      (e.metaKey || e.ctrlKey)
+                                    ) {
+                                      submitReply(e);
+                                    }
+                                    if (e.key === "Escape") {
+                                      setReplyTo(null);
+                                      setReplyText("");
+                                      if (replyImagePreview)
+                                        URL.revokeObjectURL(
+                                          replyImagePreview
+                                        );
+                                      setReplyImage(null);
+                                      setReplyImagePreview(null);
+                                    }
+                                  }}
+                                />
+                                <input
+                                  ref={replyImageInputRef}
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) =>
+                                    pickImage(
+                                      e.target.files?.[0] || null,
+                                      setReplyImage,
+                                      setReplyImagePreview
+                                    )
                                   }
-                                }}
-                              />
-                              <Button
-                                type="submit"
-                                disabled={sendingReply || !replyText.trim()}
-                                size="sm"
-                                className="cursor-pointer shrink-0 self-end"
-                              >
-                                <Send className="h-3.5 w-3.5" />
-                              </Button>
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={sendingReply}
+                                  onClick={() =>
+                                    replyImageInputRef.current?.click()
+                                  }
+                                  className="cursor-pointer shrink-0 self-end"
+                                  aria-label="Ajouter une image"
+                                >
+                                  <ImagePlus className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  type="submit"
+                                  disabled={
+                                    sendingReply ||
+                                    (!replyText.trim() && !replyImage)
+                                  }
+                                  size="sm"
+                                  className="cursor-pointer shrink-0 self-end"
+                                >
+                                  <Send className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
                             </form>
                           )}
                         </div>
@@ -597,26 +736,75 @@ export function VisitDetailDialog({
           </div>
 
           {/* Comment input */}
-          <form onSubmit={submitComment} className="flex gap-2">
-            <Textarea
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Écrire un commentaire… (Ctrl+Entrée pour envoyer)"
-              className="flex-1 min-h-[60px] resize-none"
-              disabled={sending}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                  submitComment(e);
+          <form onSubmit={submitComment} className="flex flex-col gap-2">
+            {newImagePreview && (
+              <div className="relative w-fit">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={newImagePreview}
+                  alt="Aperçu"
+                  className="max-h-40 w-auto rounded-lg border border-border/60 object-contain"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (newImagePreview) URL.revokeObjectURL(newImagePreview);
+                    setNewImage(null);
+                    setNewImagePreview(null);
+                    if (newImageInputRef.current)
+                      newImageInputRef.current.value = "";
+                  }}
+                  className="absolute -top-1.5 -right-1.5 bg-background border border-border rounded-full p-0.5 shadow cursor-pointer hover:bg-muted"
+                  aria-label="Retirer l'image"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Écrire un commentaire… (Ctrl+Entrée pour envoyer)"
+                className="flex-1 min-h-[60px] resize-none"
+                disabled={sending}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    submitComment(e);
+                  }
+                }}
+              />
+              <input
+                ref={newImageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) =>
+                  pickImage(
+                    e.target.files?.[0] || null,
+                    setNewImage,
+                    setNewImagePreview
+                  )
                 }
-              }}
-            />
-            <Button
-              type="submit"
-              disabled={sending || !newComment.trim()}
-              className="cursor-pointer shrink-0 self-end"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={sending}
+                onClick={() => newImageInputRef.current?.click()}
+                className="cursor-pointer shrink-0 self-end"
+                aria-label="Ajouter une image"
+              >
+                <ImagePlus className="h-4 w-4" />
+              </Button>
+              <Button
+                type="submit"
+                disabled={sending || (!newComment.trim() && !newImage)}
+                className="cursor-pointer shrink-0 self-end"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
           </form>
         </div>
       </DialogContent>

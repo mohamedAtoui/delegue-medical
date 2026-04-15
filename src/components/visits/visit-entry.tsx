@@ -149,14 +149,31 @@ export function InlineComments({
                     })}
                   </span>
                 </div>
-                <p
-                  className={cn(
-                    "text-xs leading-relaxed mt-0.5",
-                    isAuthor ? "text-green-800/80" : "text-foreground/70"
-                  )}
-                >
-                  {c.content}
-                </p>
+                {c.content && (
+                  <p
+                    className={cn(
+                      "text-xs leading-relaxed mt-0.5",
+                      isAuthor ? "text-green-800/80" : "text-foreground/70"
+                    )}
+                  >
+                    {c.content}
+                  </p>
+                )}
+                {c.image_url && (
+                  <a
+                    href={c.image_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block mt-1"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={c.image_url}
+                      alt="Pièce jointe"
+                      className="max-h-32 w-auto rounded-md border border-border/50 object-contain"
+                    />
+                  </a>
+                )}
               </div>
             </div>
             {replies.map((r) => {
@@ -189,14 +206,31 @@ export function InlineComments({
                         })}
                       </span>
                     </div>
-                    <p
-                      className={cn(
-                        "text-xs leading-relaxed mt-0.5",
-                        rIsAuthor ? "text-green-800/80" : "text-foreground/70"
-                      )}
-                    >
-                      {r.content}
-                    </p>
+                    {r.content && (
+                      <p
+                        className={cn(
+                          "text-xs leading-relaxed mt-0.5",
+                          rIsAuthor ? "text-green-800/80" : "text-foreground/70"
+                        )}
+                      >
+                        {r.content}
+                      </p>
+                    )}
+                    {r.image_url && (
+                      <a
+                        href={r.image_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block mt-1"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={r.image_url}
+                          alt="Pièce jointe"
+                          className="max-h-28 w-auto rounded-md border border-border/50 object-contain"
+                        />
+                      </a>
+                    )}
                   </div>
                 </div>
               );
