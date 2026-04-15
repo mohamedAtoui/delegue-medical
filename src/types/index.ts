@@ -88,7 +88,8 @@ export interface VisitComment {
   visit_id: string;
   user_id: string;
   parent_id: string | null;
-  content: string;
+  content: string | null;
+  image_url: string | null;
   created_at: string;
   user?: Pick<User, "id" | "first_name" | "last_name" | "avatar_url">;
 }
