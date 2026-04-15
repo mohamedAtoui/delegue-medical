@@ -16,6 +16,7 @@ import {
   Pill,
   MapPin,
   Send,
+  ImagePlus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,9 +52,38 @@ export function InlineComments({
   const [comments, setComments] = useState<VisitComment[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [newComment, setNewComment] = useState("");
+  const [newImage, setNewImage] = useState<File | null>(null);
+  const [newImagePreview, setNewImagePreview] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+  const pickImage = (file: File | null) => {
+    if (!file) {
+      setNewImage(null);
+      setNewImagePreview(null);
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      toast.error("Veuillez choisir une image");
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      toast.error("L'image dépasse 5 Mo");
+      return;
+    }
+    setNewImage(file);
+    setNewImagePreview(URL.createObjectURL(file));
+  };
+
+  useEffect(() => {
+    return () => {
+      if (newImagePreview) URL.revokeObjectURL(newImagePreview);
+    };
+  }, [newImagePreview]);
 
   const fetchComments = useCallback(async () => {
     try {
@@ -73,20 +103,29 @@ export function InlineComments({
 
   const submitComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComment.trim()) return;
+    if (!newComment.trim() && !newImage) return;
     setSending(true);
     try {
+      const fd = new FormData();
+      if (newComment.trim()) fd.append("content", newComment.trim());
+      if (newImage) fd.append("image", newImage);
       const res = await fetch(`/api/visits/${visitId}/comments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newComment.trim() }),
+        body: fd,
       });
-      if (!res.ok) throw new Error("Erreur");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Erreur");
+      }
       const created = await res.json();
       setComments((prev) => [...prev, created]);
       setNewComment("");
-    } catch {
-      toast.error("Erreur lors de l'envoi");
+      setNewImage(null);
+      if (newImagePreview) URL.revokeObjectURL(newImagePreview);
+      setNewImagePreview(null);
+      if (imageInputRef.current) imageInputRef.current.value = "";
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur lors de l'envoi");
     } finally {
       setSending(false);
     }
@@ -240,28 +279,71 @@ export function InlineComments({
       })}
 
       {/* Inline comment input */}
-      <form onSubmit={submitComment} className="flex gap-1.5 pt-1">
-        <Textarea
-          ref={inputRef}
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          placeholder="Commenter..."
-          disabled={sending}
-          className="flex-1 min-h-[32px] max-h-[80px] resize-none text-xs py-1.5 px-2.5"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              submitComment(e);
-            }
-          }}
-        />
-        <Button
-          type="submit"
-          size="sm"
-          disabled={sending || !newComment.trim()}
-          className="cursor-pointer shrink-0 self-end h-8 w-8 p-0"
-        >
-          <Send className="h-3 w-3" />
-        </Button>
+      <form onSubmit={submitComment} className="flex flex-col gap-1.5 pt-1">
+        {newImagePreview && (
+          <div className="relative w-fit">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={newImagePreview}
+              alt="Aperçu"
+              className="max-h-28 w-auto rounded-md border border-border/50 object-contain"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (newImagePreview) URL.revokeObjectURL(newImagePreview);
+                setNewImage(null);
+                setNewImagePreview(null);
+                if (imageInputRef.current) imageInputRef.current.value = "";
+              }}
+              className="absolute -top-1.5 -right-1.5 bg-background border border-border rounded-full p-0.5 shadow cursor-pointer hover:bg-muted"
+              aria-label="Retirer l'image"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+        <div className="flex gap-1.5">
+          <Textarea
+            ref={inputRef}
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            placeholder="Commenter..."
+            disabled={sending}
+            className="flex-1 min-h-[32px] max-h-[80px] resize-none text-xs py-1.5 px-2.5"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                submitComment(e);
+              }
+            }}
+          />
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => pickImage(e.target.files?.[0] || null)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={sending}
+            onClick={() => imageInputRef.current?.click()}
+            className="cursor-pointer shrink-0 self-end h-8 w-8 p-0"
+            aria-label="Ajouter une image"
+          >
+            <ImagePlus className="h-3 w-3" />
+          </Button>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={sending || (!newComment.trim() && !newImage)}
+            className="cursor-pointer shrink-0 self-end h-8 w-8 p-0"
+          >
+            <Send className="h-3 w-3" />
+          </Button>
+        </div>
       </form>
     </div>
   );
