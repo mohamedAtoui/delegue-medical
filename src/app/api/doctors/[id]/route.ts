@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/utils/supabase/server";
+import { getOrCreateUser } from "@/lib/clerk/sync-user";
 
 export async function GET(
   request: NextRequest,
@@ -98,4 +99,32 @@ export async function PUT(
   }
 
   return NextResponse.json(data);
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const currentUser = await getOrCreateUser();
+  if (!currentUser) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  }
+
+  if (currentUser.role !== "superviseur") {
+    return NextResponse.json(
+      { error: "Seul un superviseur peut supprimer un médecin ou pharmacien" },
+      { status: 403 }
+    );
+  }
+
+  const { id } = await params;
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("doctors").delete().eq("id", id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
 }

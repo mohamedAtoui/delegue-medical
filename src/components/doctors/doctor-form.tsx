@@ -13,20 +13,36 @@ import {
 } from "@/components/ui/select";
 import { WilayaSelect } from "@/components/shared/wilaya-select";
 import { SPECIALTIES } from "@/lib/constants/specialties";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Star, Stethoscope, Pill } from "lucide-react";
+import { Star, Stethoscope, Pill, Trash2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Doctor, DoctorType } from "@/types";
 
 interface DoctorFormProps {
   onSuccess: (doctor: Doctor) => void;
   onCancel?: () => void;
+  onDelete?: () => void;
   initialData?: Doctor | null;
   defaultType?: DoctorType;
+  userRole?: string;
 }
 
-export function DoctorForm({ onSuccess, onCancel, initialData, defaultType }: DoctorFormProps) {
+export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, defaultType, userRole }: DoctorFormProps) {
   const [loading, setLoading] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -357,6 +373,102 @@ export function DoctorForm({ onSuccess, onCancel, initialData, defaultType }: Do
             : `Ajouter le ${isPharmacien ? "pharmacien" : "médecin"}`}
         </Button>
       </div>
+
+      {/* Danger zone — supervisor only, edit mode only */}
+      {isEdit && userRole === "superviseur" && initialData && (
+        <>
+          <Separator className="my-6" />
+          <div className="rounded-lg border border-red-200 bg-red-50/50 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+              <h3 className="text-sm font-semibold text-red-800">Zone dangereuse</h3>
+            </div>
+            <p className="text-xs text-red-700/80">
+              Supprimer {isPharmacien ? "ce pharmacien" : "ce médecin"} ainsi que toutes ses visites,
+              commentaires et planifications. Cette action est irréversible.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setDeleteConfirmText("");
+                setShowDeleteDialog(true);
+              }}
+              className="cursor-pointer border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800"
+            >
+              <Trash2 className="mr-2 h-3.5 w-3.5" />
+              Supprimer définitivement
+            </Button>
+          </div>
+
+          <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-red-700">
+                  Supprimer {isPharmacien ? "" : "Dr. "}
+                  {initialData.last_name} {initialData.first_name} ?
+                </AlertDialogTitle>
+                <AlertDialogDescription className="space-y-3">
+                  <span className="block">
+                    Cette action est irréversible. Toutes les visites, commentaires et
+                    planifications associées seront définitivement supprimées.
+                  </span>
+                  <span className="block text-sm font-medium text-foreground">
+                    Tapez{" "}
+                    <span className="font-mono text-red-600">
+                      supprimer {isPharmacien ? "" : "Dr. "}
+                      {initialData.last_name} {initialData.first_name}
+                    </span>
+                    {" "}pour confirmer :
+                  </span>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <Input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={`supprimer ${isPharmacien ? "" : "Dr. "}${initialData.last_name} ${initialData.first_name}`}
+                className="font-mono text-sm"
+              />
+              <AlertDialogFooter>
+                <AlertDialogCancel className="cursor-pointer">Annuler</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={
+                    deleting ||
+                    deleteConfirmText.trim().toLowerCase() !==
+                      `supprimer ${isPharmacien ? "" : "dr. "}${initialData.last_name} ${initialData.first_name}`.toLowerCase()
+                  }
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    setDeleting(true);
+                    try {
+                      const res = await fetch(`/api/doctors/${initialData.id}`, {
+                        method: "DELETE",
+                      });
+                      if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.error);
+                      }
+                      toast.success(
+                        `${isPharmacien ? "Pharmacien" : "Médecin"} supprimé avec toutes ses données`
+                      );
+                      setShowDeleteDialog(false);
+                      onDelete?.();
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Erreur lors de la suppression");
+                    } finally {
+                      setDeleting(false);
+                    }
+                  }}
+                  className="bg-red-600 hover:bg-red-700 cursor-pointer"
+                >
+                  {deleting ? "Suppression..." : "Supprimer définitivement"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      )}
     </form>
   );
 }
