@@ -128,3 +128,37 @@
     @apply font-sans;
   }
 }
+
+@keyframes medical-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(0.92);
+  }
+}
+
+.animate-medical-pulse {
+  animation: medical-pulse 1.4s ease-in-out infinite;
+}
+
+/* Brain-activity breathing animation — smooth grow & shrink, no rotation.
+   The two-stage scale and opacity lift mimic an inhale/exhale rhythm. */
+@keyframes brain-breathe {
+  0%, 100% {
+    transform: scale(0.78);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+
+.animate-brain-breathe {
+  animation: brain-breathe 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  transform-origin: center;
+  will-change: transform, opacity;
+}

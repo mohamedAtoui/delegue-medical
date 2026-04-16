@@ -2,12 +2,17 @@
 
 import { AssignmentList } from "@/components/assignments/assignment-list";
 import { CalendarCheck } from "lucide-react";
+import type { VisitAssignmentWithDetails } from "@/types";
 
 interface PlanificationClientProps {
   userId: string;
+  initialAssignments?: VisitAssignmentWithDetails[];
 }
 
-export function PlanificationClient({ userId }: PlanificationClientProps) {
+export function PlanificationClient({
+  userId,
+  initialAssignments,
+}: PlanificationClientProps) {
   return (
     <div className="space-y-6">
       <div>
@@ -20,7 +25,10 @@ export function PlanificationClient({ userId }: PlanificationClientProps) {
         </p>
       </div>
 
-      <AssignmentList assigneeId={userId} />
+      <AssignmentList
+        assigneeId={userId}
+        initialAssignments={initialAssignments}
+      />
     </div>
   );
 }

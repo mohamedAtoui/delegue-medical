@@ -5,6 +5,7 @@ import { createClient } from "@/utils/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity } from "lucide-react";
 import { DoctorVisitGroup } from "@/components/visits/visit-card";
+import { MedicalLoader } from "@/components/ui/medical-loader";
 import type { VisitWithDetails, DoctorType } from "@/types";
 
 interface DoctorGroup {
@@ -16,9 +17,14 @@ interface DoctorGroup {
   visits: VisitWithDetails[];
 }
 
-export function ActivityFeed() {
-  const [visits, setVisits] = useState<VisitWithDetails[]>([]);
-  const [loading, setLoading] = useState(true);
+interface ActivityFeedProps {
+  initialVisits?: VisitWithDetails[];
+}
+
+export function ActivityFeed({ initialVisits }: ActivityFeedProps = {}) {
+  const hasInitial = initialVisits !== undefined;
+  const [visits, setVisits] = useState<VisitWithDetails[]>(initialVisits || []);
+  const [loading, setLoading] = useState(!hasInitial);
 
   const fetchRecent = useCallback(async () => {
     try {
@@ -31,7 +37,11 @@ export function ActivityFeed() {
   }, []);
 
   useEffect(() => {
-    fetchRecent();
+    // If we have server-rendered initial data, skip the immediate fetch but
+    // still subscribe to realtime updates so new visits stream in.
+    if (!hasInitial) {
+      fetchRecent();
+    }
 
     const supabase = createClient();
     const channel = supabase
@@ -48,7 +58,7 @@ export function ActivityFeed() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchRecent]);
+  }, [fetchRecent, hasInitial]);
 
   const groups = useMemo(() => {
     const map = new Map<string, DoctorGroup>();
@@ -88,11 +98,7 @@ export function ActivityFeed() {
       </CardHeader>
       <CardContent className="max-h-[500px] overflow-y-auto">
         {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-16 rounded-lg bg-muted/50 animate-pulse" />
-            ))}
-          </div>
+          <MedicalLoader variant="inline" className="min-h-[200px]" />
         ) : visits.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
             Aucune activité récente
