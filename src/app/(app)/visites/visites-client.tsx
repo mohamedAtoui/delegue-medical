@@ -26,16 +26,18 @@ import { WilayaSelect } from "@/components/shared/wilaya-select";
 import { VisitForm } from "@/components/visits/visit-form";
 import { VisitHistory } from "@/components/visits/visit-history";
 import { cn } from "@/lib/utils";
-import type { DoctorType, User, UserRole } from "@/types";
+import type { DoctorType, User, UserRole, VisitWithDetails } from "@/types";
 
 type TypeFilter = "" | DoctorType;
 type DateRange = "" | "today" | "week" | "month" | "custom";
 
 interface VisitesClientProps {
   role: UserRole;
+  initialVisits?: VisitWithDetails[];
+  initialTotal?: number;
 }
 
-export function VisitesClient({ role }: VisitesClientProps) {
+export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClientProps) {
   const isSupervisor = role === "superviseur";
   const [refreshKey, setRefreshKey] = useState(0);
   const [showForm, setShowForm] = useState(false);
@@ -294,6 +296,8 @@ export function VisitesClient({ role }: VisitesClientProps) {
         wilaya={wilayaFilter || undefined}
         userId={delegueFilter || undefined}
         search={search || undefined}
+        initialVisits={initialVisits}
+        initialTotal={initialTotal}
       />
     </div>
   );

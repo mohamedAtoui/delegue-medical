@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { DoctorVisitGroup } from "./visit-card";
 import { Button } from "@/components/ui/button";
+import { MedicalLoader } from "@/components/ui/medical-loader";
 import type { VisitWithDetails, DoctorType } from "@/types";
 
 interface VisitHistoryProps {
@@ -14,6 +15,8 @@ interface VisitHistoryProps {
   wilaya?: string;
   userId?: string;
   search?: string;
+  initialVisits?: VisitWithDetails[];
+  initialTotal?: number;
 }
 
 interface DoctorGroup {
@@ -25,6 +28,30 @@ interface DoctorGroup {
   visits: VisitWithDetails[];
 }
 
+function groupByDoctor(visits: VisitWithDetails[]): DoctorGroup[] {
+  const groupMap = new Map<string, DoctorGroup>();
+  for (const visit of visits) {
+    const doctorId = visit.doctor_id;
+    if (!groupMap.has(doctorId)) {
+      const isPharm = visit.doctor?.doctor_type === "pharmacien";
+      groupMap.set(doctorId, {
+        doctorId,
+        doctorName: `${isPharm ? "" : "Dr. "}${visit.doctor?.last_name || ""} ${visit.doctor?.first_name || ""}`.trim(),
+        specialty: visit.doctor?.specialty || null,
+        wilaya: visit.doctor?.wilaya || "",
+        doctorType: (visit.doctor?.doctor_type || "medecin") as DoctorType,
+        visits: [],
+      });
+    }
+    groupMap.get(doctorId)!.visits.push(visit);
+  }
+  return Array.from(groupMap.values()).sort(
+    (a, b) =>
+      new Date(b.visits[0].created_at).getTime() -
+      new Date(a.visits[0].created_at).getTime()
+  );
+}
+
 export function VisitHistory({
   refreshKey = 0,
   showUser = false,
@@ -34,11 +61,19 @@ export function VisitHistory({
   wilaya,
   userId,
   search,
+  initialVisits,
+  initialTotal,
 }: VisitHistoryProps) {
-  const [groups, setGroups] = useState<DoctorGroup[]>([]);
-  const [loading, setLoading] = useState(true);
+  const hasInitial = initialVisits !== undefined;
+  const [groups, setGroups] = useState<DoctorGroup[]>(() =>
+    hasInitial ? groupByDoctor(initialVisits!) : []
+  );
+  const [loading, setLoading] = useState(!hasInitial);
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
+  const [total, setTotal] = useState(initialTotal ?? 0);
+
+  // Skip the very first fetch when initial data was provided server-side.
+  const skipNext = useRef(hasInitial);
 
   const fetchVisits = useCallback(async () => {
     setLoading(true);
@@ -57,48 +92,22 @@ export function VisitHistory({
       const data = await res.json();
       const visits: VisitWithDetails[] = data.data || [];
       setTotal(data.count || 0);
-
-      const groupMap = new Map<string, DoctorGroup>();
-      for (const visit of visits) {
-        const doctorId = visit.doctor_id;
-        if (!groupMap.has(doctorId)) {
-          const isPharm = visit.doctor?.doctor_type === "pharmacien";
-          groupMap.set(doctorId, {
-            doctorId,
-            doctorName: `${isPharm ? "" : "Dr. "}${visit.doctor?.last_name || ""} ${visit.doctor?.first_name || ""}`.trim(),
-            specialty: visit.doctor?.specialty || null,
-            wilaya: visit.doctor?.wilaya || "",
-            doctorType: (visit.doctor?.doctor_type || "medecin") as DoctorType,
-            visits: [],
-          });
-        }
-        groupMap.get(doctorId)!.visits.push(visit);
-      }
-
-      const sorted = Array.from(groupMap.values()).sort(
-        (a, b) =>
-          new Date(b.visits[0].created_at).getTime() -
-          new Date(a.visits[0].created_at).getTime()
-      );
-
-      setGroups(sorted);
+      setGroups(groupByDoctor(visits));
     } finally {
       setLoading(false);
     }
   }, [fetchUrl, showUser, page, typeFilter, from, wilaya, userId, search]);
 
   useEffect(() => {
+    if (skipNext.current) {
+      skipNext.current = false;
+      return;
+    }
     fetchVisits();
   }, [fetchVisits, refreshKey]);
 
   if (loading && groups.length === 0) {
-    return (
-      <div className="space-y-3">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="h-20 rounded-lg bg-muted/50 animate-pulse" />
-        ))}
-      </div>
-    );
+    return <MedicalLoader variant="inline" />;
   }
 
   if (groups.length === 0) {
@@ -110,7 +119,9 @@ export function VisitHistory({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="relative space-y-3">
+      {loading && <MedicalLoader variant="overlay" />}
+
       {groups.map((group) => (
         <DoctorVisitGroup
           key={group.doctorId}

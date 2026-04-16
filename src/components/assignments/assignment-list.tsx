@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { AssignmentCard } from "./assignment-card";
 import { AssignmentForm } from "./assignment-form";
 import { Button } from "@/components/ui/button";
+import { MedicalLoader } from "@/components/ui/medical-loader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,18 +33,24 @@ interface AssignmentListProps {
   assigneeId: string;
   /** Show assignee name on each card (for supervisor view) */
   showAssignee?: boolean;
+  initialAssignments?: VisitAssignmentWithDetails[];
 }
 
 export function AssignmentList({
   assigneeId,
   showAssignee = false,
+  initialAssignments,
 }: AssignmentListProps) {
-  const [assignments, setAssignments] = useState<VisitAssignmentWithDetails[]>([]);
-  const [loading, setLoading] = useState(true);
+  const hasInitial = initialAssignments !== undefined;
+  const [assignments, setAssignments] = useState<VisitAssignmentWithDetails[]>(
+    initialAssignments || []
+  );
+  const [loading, setLoading] = useState(!hasInitial);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<VisitAssignmentWithDetails | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const skipNext = useRef(hasInitial);
 
   const fetchAssignments = useCallback(async () => {
     setLoading(true);
@@ -62,6 +69,10 @@ export function AssignmentList({
   }, [assigneeId, statusFilter]);
 
   useEffect(() => {
+    if (skipNext.current) {
+      skipNext.current = false;
+      return;
+    }
     fetchAssignments();
   }, [fetchAssignments]);
 
@@ -175,12 +186,8 @@ export function AssignmentList({
       </div>
 
       {/* List */}
-      {loading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-24 rounded-xl bg-muted/30 animate-pulse" />
-          ))}
-        </div>
+      {loading && assignments.length === 0 ? (
+        <MedicalLoader variant="inline" />
       ) : assignments.length === 0 ? (
         <div className="text-center py-12">
           <CalendarCheck className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
@@ -191,7 +198,8 @@ export function AssignmentList({
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="relative space-y-2">
+          {loading && <MedicalLoader variant="overlay" />}
           {assignments.map((a) => (
             <AssignmentCard
               key={a.id}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/utils/supabase/server";
 import { getOrCreateUser } from "@/lib/clerk/sync-user";
+import { fetchAssignments } from "@/lib/queries/assignments";
 
 export async function GET(request: NextRequest) {
   const { userId } = await auth();
@@ -15,62 +16,26 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const assigneeId = searchParams.get("assignee_id");
   const status = searchParams.get("status");
-  const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "50");
-  const offset = (page - 1) * limit;
 
-  const supabase = await createClient();
+  try {
+    const result = await fetchAssignments({
+      currentUserId: currentUser.id,
+      currentUserRole: currentUser.role,
+      assigneeId: searchParams.get("assignee_id"),
+      status:
+        status === "completed" || status === "pending" || status === "overdue"
+          ? status
+          : null,
+      page: parseInt(searchParams.get("page") || "1"),
+      limit: parseInt(searchParams.get("limit") || "50"),
+    });
 
-  let query = supabase
-    .from("visit_assignments")
-    .select(
-      `*, doctor:doctors(*), assignee:users!visit_assignments_assignee_id_fkey(id, first_name, last_name, avatar_url), assigner:users!visit_assignments_assigned_by_fkey(id, first_name, last_name, avatar_url)`,
-      { count: "exact" }
-    );
-
-  // Delegue can only see own assignments
-  if (currentUser.role === "delegue") {
-    query = query.eq("assignee_id", currentUser.id);
-  } else if (assigneeId) {
-    query = query.eq("assignee_id", assigneeId);
+    return NextResponse.json(result);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Erreur inconnue";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  // Filter by status (overdue is computed client-side from pending + past deadline)
-  if (status === "completed") {
-    query = query.eq("status", "completed");
-  } else if (status === "pending" || status === "overdue") {
-    query = query.eq("status", "pending");
-  }
-
-  const { data, error, count } = await query
-    .order("deadline", { ascending: true })
-    .range(offset, offset + limit - 1);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  // Compute overdue status for pending items
-  const now = new Date();
-  const enriched = (data || []).map((item) => ({
-    ...item,
-    status:
-      item.status === "pending" && new Date(item.deadline) < now
-        ? "overdue"
-        : item.status,
-  }));
-
-  // If filtering by overdue/pending specifically, filter after computation
-  let filtered = enriched;
-  if (status === "overdue") {
-    filtered = enriched.filter((item) => item.status === "overdue");
-  } else if (status === "pending") {
-    filtered = enriched.filter((item) => item.status === "pending");
-  }
-
-  return NextResponse.json({ data: filtered, count, page, limit });
 }
 
 export async function POST(request: NextRequest) {

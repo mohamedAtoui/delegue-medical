@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/utils/supabase/server";
 import { getOrCreateUser } from "@/lib/clerk/sync-user";
+import { fetchDoctors } from "@/lib/queries/doctors";
 
 export async function GET(request: NextRequest) {
   const { userId } = await auth();
@@ -10,56 +11,23 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const search = searchParams.get("search");
-  const wilaya = searchParams.get("wilaya");
-  const specialty = searchParams.get("specialty");
   const type = searchParams.get("type");
-  const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "20");
-  const offset = (page - 1) * limit;
 
-  const supabase = await createClient();
-  let query = supabase.from("doctors").select("*", { count: "exact" });
-
-  if (search) {
-    query = query.or(
-      `first_name.ilike.%${search}%,last_name.ilike.%${search}%`
-    );
-  }
-  if (wilaya) query = query.eq("wilaya", wilaya);
-  if (specialty) query = query.eq("specialty", specialty);
-  if (type === "medecin" || type === "pharmacien") query = query.eq("doctor_type", type);
-
-  const { data: doctors, error, count } = await query
-    .order("last_name")
-    .range(offset, offset + limit - 1);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  // Get last visit date for each doctor
-  if (doctors && doctors.length > 0) {
-    const doctorIds = doctors.map((d) => d.id);
-    const { data: lastVisits } = await supabase
-      .from("visits")
-      .select("doctor_id, created_at")
-      .in("doctor_id", doctorIds)
-      .order("created_at", { ascending: false });
-
-    const lastVisitMap = new Map<string, string>();
-    lastVisits?.forEach((v) => {
-      if (!lastVisitMap.has(v.doctor_id)) {
-        lastVisitMap.set(v.doctor_id, v.created_at);
-      }
+  try {
+    const result = await fetchDoctors({
+      search: searchParams.get("search"),
+      wilaya: searchParams.get("wilaya"),
+      specialty: searchParams.get("specialty"),
+      type: type === "medecin" || type === "pharmacien" ? type : null,
+      page: parseInt(searchParams.get("page") || "1"),
+      limit: parseInt(searchParams.get("limit") || "20"),
     });
 
-    doctors.forEach((doc) => {
-      (doc as Record<string, unknown>).last_visited_at = lastVisitMap.get(doc.id) || null;
-    });
+    return NextResponse.json(result);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Erreur inconnue";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  return NextResponse.json({ data: doctors, count, page, limit });
 }
 
 export async function POST(request: NextRequest) {

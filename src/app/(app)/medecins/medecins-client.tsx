@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Search,
   Plus,
@@ -38,6 +38,7 @@ import {
 import { DoctorForm } from "@/components/doctors/doctor-form";
 import { VisitEntry } from "@/components/visits/visit-entry";
 import { WilayaSelect } from "@/components/shared/wilaya-select";
+import { MedicalLoader } from "@/components/ui/medical-loader";
 import { SPECIALTIES } from "@/lib/constants/specialties";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -49,21 +50,26 @@ type TypeFilter = "all" | DoctorType;
 
 interface MedecinsClientProps {
   role: UserRole;
+  initialDoctors?: Doctor[];
 }
 
-export function MedecinsClient({ role }: MedecinsClientProps) {
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
+export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
+  const hasInitial = initialDoctors !== undefined;
+  const [doctors, setDoctors] = useState<Doctor[]>(initialDoctors || []);
   const [search, setSearch] = useState("");
   const [wilaya, setWilaya] = useState("");
   const [specialty, setSpecialty] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!hasInitial);
 
   // Inline expand
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedVisits, setExpandedVisits] = useState<VisitWithDetails[]>([]);
   const [visitsLoading, setVisitsLoading] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+
+  // Skip first fetch when server-rendered initial data is present.
+  const skipNext = useRef(hasInitial);
 
   const fetchDoctors = useCallback(async () => {
     setLoading(true);
@@ -83,6 +89,10 @@ export function MedecinsClient({ role }: MedecinsClientProps) {
   }, [search, wilaya, specialty, typeFilter]);
 
   useEffect(() => {
+    if (skipNext.current) {
+      skipNext.current = false;
+      return;
+    }
     const timeout = setTimeout(fetchDoctors, 300);
     return () => clearTimeout(timeout);
   }, [fetchDoctors]);
@@ -197,18 +207,15 @@ export function MedecinsClient({ role }: MedecinsClientProps) {
       </div>
 
       {/* Results */}
-      {loading ? (
-        <div className="space-y-3">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-20 rounded-lg bg-muted/50 animate-pulse" />
-          ))}
-        </div>
+      {loading && doctors.length === 0 ? (
+        <MedicalLoader variant="inline" />
       ) : doctors.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-muted-foreground">Aucun résultat</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="relative space-y-3">
+          {loading && <MedicalLoader variant="overlay" />}
           {doctors.map((doctor) => {
             const isExpanded = expandedId === doctor.id;
             const isPharm = doctor.doctor_type === "pharmacien";
@@ -381,11 +388,7 @@ export function MedecinsClient({ role }: MedecinsClientProps) {
                           {!visitsLoading && ` (${expandedVisits.length})`}
                         </p>
                         {visitsLoading ? (
-                          <div className="space-y-2">
-                            {[1, 2].map((i) => (
-                              <div key={i} className="h-14 rounded-lg bg-muted/50 animate-pulse" />
-                            ))}
-                          </div>
+                          <MedicalLoader variant="inline" className="min-h-[120px]" />
                         ) : expandedVisits.length === 0 ? (
                           <p className="text-xs text-muted-foreground py-3 text-center">
                             Aucune visite enregistrée

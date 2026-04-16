@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/utils/supabase/server";
 import { getOrCreateUser } from "@/lib/clerk/sync-user";
+import { fetchVisits } from "@/lib/queries/visits";
 
 export async function GET(request: NextRequest) {
   const { userId } = await auth();
@@ -10,81 +11,36 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const userFilter = searchParams.get("user_id");
-  const doctorId = searchParams.get("doctor_id");
-  const from = searchParams.get("from");
-  const to = searchParams.get("to");
-  const type = searchParams.get("type"); // medecin | pharmacien
-  const wilaya = searchParams.get("wilaya");
-  const search = searchParams.get("search")?.trim();
-  const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "20");
   const all = searchParams.get("all") === "true";
-  const offset = (page - 1) * limit;
+  const userFilter = searchParams.get("user_id");
+  const type = searchParams.get("type");
 
-  const supabase = await createClient();
-
-  // Use inner join on doctors when filtering by wilaya or doctor name
-  const needsInnerDoctor = !!wilaya || !!search;
-  const doctorSelect = needsInnerDoctor ? "doctor:doctors!inner(*)" : "doctor:doctors(*)";
-
-  let query = supabase
-    .from("visits")
-    .select(`*, ${doctorSelect}, user:users(*)`, { count: "exact" });
-
+  let currentUserId: string | undefined;
   if (!all) {
     const currentUser = await getOrCreateUser();
-    if (currentUser) {
-      query = query.eq("user_id", userFilter || currentUser.id);
-    }
-  } else if (userFilter) {
-    query = query.eq("user_id", userFilter);
+    currentUserId = currentUser?.id;
   }
 
-  if (doctorId) query = query.eq("doctor_id", doctorId);
-  if (from) query = query.gte("created_at", from);
-  if (to) query = query.lte("created_at", to);
-  if (type === "medecin" || type === "pharmacien") {
-    query = query.eq("visit_type", type);
-  }
-  if (wilaya) {
-    query = query.eq("doctor.wilaya", wilaya);
-  }
-  if (search) {
-    // Search on doctor last/first name (via inner join)
-    const like = `%${search}%`;
-    query = query.or(`last_name.ilike.${like},first_name.ilike.${like}`, {
-      foreignTable: "doctor",
-    });
-  }
-
-  const { data, error, count } = await query
-    .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  // Attach comment count to each visit
-  if (data && data.length > 0) {
-    const visitIds = data.map((v) => v.id);
-    const { data: comments } = await supabase
-      .from("visit_comments")
-      .select("visit_id")
-      .in("visit_id", visitIds);
-
-    const counts = new Map<string, number>();
-    comments?.forEach((c) => {
-      counts.set(c.visit_id, (counts.get(c.visit_id) || 0) + 1);
+  try {
+    const result = await fetchVisits({
+      all,
+      currentUserId,
+      userFilter,
+      doctorId: searchParams.get("doctor_id"),
+      from: searchParams.get("from"),
+      to: searchParams.get("to"),
+      type: type === "medecin" || type === "pharmacien" ? type : null,
+      wilaya: searchParams.get("wilaya"),
+      search: searchParams.get("search")?.trim() || null,
+      page: parseInt(searchParams.get("page") || "1"),
+      limit: parseInt(searchParams.get("limit") || "20"),
     });
 
-    data.forEach((v) => {
-      (v as Record<string, unknown>).comment_count = counts.get(v.id) || 0;
-    });
+    return NextResponse.json(result);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Erreur inconnue";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  return NextResponse.json({ data, count, page, limit });
 }
 
 export async function POST(request: NextRequest) {
