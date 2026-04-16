@@ -9,8 +9,6 @@ import {
   Users,
   Search,
   X,
-  SlidersHorizontal,
-  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,13 +21,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { WilayaSelect } from "@/components/shared/wilaya-select";
+import {
+  DateRangeFilter,
+  resolveDateRange,
+  type DateRangeValue,
+} from "@/components/shared/date-range-filter";
 import { VisitForm } from "@/components/visits/visit-form";
 import { VisitHistory } from "@/components/visits/visit-history";
 import { cn } from "@/lib/utils";
 import type { DoctorType, User, UserRole, VisitWithDetails } from "@/types";
 
 type TypeFilter = "" | DoctorType;
-type DateRange = "" | "today" | "week" | "month" | "custom";
 
 interface VisitesClientProps {
   role: UserRole;
@@ -42,12 +44,11 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
   const [refreshKey, setRefreshKey] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
-  const [dateRange, setDateRange] = useState<DateRange>("");
+  const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: "" });
   const [wilayaFilter, setWilayaFilter] = useState("");
   const [delegueFilter, setDelegueFilter] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [customDate, setCustomDate] = useState("");
   const [reps, setReps] = useState<User[]>([]);
 
   // Debounce search
@@ -65,32 +66,18 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
       .catch(() => setReps([]));
   }, [isSupervisor]);
 
-  const getFrom = (): string | undefined => {
-    if (!dateRange) return undefined;
-    if (dateRange === "custom") {
-      if (!customDate) return undefined;
-      const d = new Date(customDate);
-      d.setHours(0, 0, 0, 0);
-      return d.toISOString();
-    }
-    const from = new Date();
-    if (dateRange === "today") from.setHours(0, 0, 0, 0);
-    else if (dateRange === "week") from.setDate(from.getDate() - 7);
-    else if (dateRange === "month") from.setMonth(from.getMonth() - 1);
-    return from.toISOString();
-  };
+  const { from: fromIso, to: toIso } = resolveDateRange(dateRange);
 
   const activeFilterCount =
     (typeFilter ? 1 : 0) +
-    (dateRange ? 1 : 0) +
+    (dateRange.preset ? 1 : 0) +
     (wilayaFilter ? 1 : 0) +
     (delegueFilter ? 1 : 0) +
     (search ? 1 : 0);
 
   const resetFilters = () => {
     setTypeFilter("");
-    setDateRange("");
-    setCustomDate("");
+    setDateRange({ preset: "" });
     setWilayaFilter("");
     setDelegueFilter("");
     setSearchInput("");
@@ -201,49 +188,11 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
         </div>
 
         {/* Filter row */}
-        <div
-          className={cn(
-            "grid gap-2",
-            isSupervisor
-              ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
-              : dateRange === "custom"
-              ? "grid-cols-1 sm:grid-cols-2"
-              : "grid-cols-1"
-          )}
-        >
-          <Select
-            value={dateRange}
-            onValueChange={(v) => {
-              setDateRange(v as DateRange);
-              if (v !== "custom") setCustomDate("");
-            }}
-          >
-            <SelectTrigger>
-              <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground mr-1" />
-              <SelectValue placeholder="Toutes les dates" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">Aujourd&apos;hui</SelectItem>
-              <SelectItem value="week">Cette semaine</SelectItem>
-              <SelectItem value="month">Ce mois-ci</SelectItem>
-              <SelectItem value="custom">Date précise…</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {dateRange === "custom" && (
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                type="date"
-                value={customDate}
-                onChange={(e) => setCustomDate(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-          )}
+        <div className="space-y-2">
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
 
           {isSupervisor && (
-            <>
+            <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
               <WilayaSelect
                 value={wilayaFilter}
                 onValueChange={setWilayaFilter}
@@ -266,7 +215,7 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
                   ))}
                 </SelectContent>
               </Select>
-            </>
+            </div>
           )}
         </div>
 
@@ -292,7 +241,8 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
         refreshKey={refreshKey}
         showUser={isSupervisor}
         typeFilter={typeFilter || "all"}
-        from={getFrom()}
+        from={fromIso}
+        to={toIso}
         wilaya={wilayaFilter || undefined}
         userId={delegueFilter || undefined}
         search={search || undefined}

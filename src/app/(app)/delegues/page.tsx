@@ -20,6 +20,11 @@ import { VisitEntry } from "@/components/visits/visit-entry";
 import { AssignmentList } from "@/components/assignments/assignment-list";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { WILAYAS } from "@/lib/constants/wilayas";
+import {
+  DateRangeFilter,
+  resolveDateRange,
+  type DateRangeValue,
+} from "@/components/shared/date-range-filter";
 import { toast } from "sonner";
 import {
   User,
@@ -40,7 +45,6 @@ import { cn } from "@/lib/utils";
 import type { User as UserType, VisitWithDetails, DoctorType } from "@/types";
 
 type GroupBy = "doctor" | "date" | "wilaya";
-type DateRange = "" | "today" | "week" | "month";
 type TypeFilter = "" | DoctorType;
 
 export default function DeleguesPage() {
@@ -51,7 +55,7 @@ export default function DeleguesPage() {
 
   // Filters
   const [groupBy, setGroupBy] = useState<GroupBy>("doctor");
-  const [dateRange, setDateRange] = useState<DateRange>("");
+  const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: "" });
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
   const [searchDoctor, setSearchDoctor] = useState("");
 
@@ -108,7 +112,7 @@ export default function DeleguesPage() {
   const selectRep = (rep: UserType) => {
     setSelectedRep(rep);
     setSearchDoctor("");
-    setDateRange("");
+    setDateRange({ preset: "" });
     setTypeFilter("");
     fetchVisits(rep.id);
   };
@@ -120,13 +124,18 @@ export default function DeleguesPage() {
     // Step 1: filter only this rep's visits by filters
     let repVisits = visits.filter((v) => v.user_id === selectedRep.id);
 
-    if (dateRange) {
-      const now = new Date();
-      const from = new Date();
-      if (dateRange === "today") from.setHours(0, 0, 0, 0);
-      else if (dateRange === "week") from.setDate(now.getDate() - 7);
-      else if (dateRange === "month") from.setMonth(now.getMonth() - 1);
-      repVisits = repVisits.filter((v) => new Date(v.created_at) >= from);
+    const { from: fromIso, to: toIso } = resolveDateRange(dateRange);
+    if (fromIso) {
+      const fromTs = new Date(fromIso).getTime();
+      repVisits = repVisits.filter(
+        (v) => new Date(v.created_at).getTime() >= fromTs
+      );
+    }
+    if (toIso) {
+      const toTs = new Date(toIso).getTime();
+      repVisits = repVisits.filter(
+        (v) => new Date(v.created_at).getTime() <= toTs
+      );
     }
 
     if (typeFilter) {
@@ -481,19 +490,11 @@ export default function DeleguesPage() {
                   </SelectContent>
                 </Select>
 
-                <Select
+                <DateRangeFilter
                   value={dateRange}
-                  onValueChange={(v) => setDateRange(v as DateRange)}
-                >
-                  <SelectTrigger className="w-full sm:w-40">
-                    <SelectValue placeholder="Toutes les dates" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="today">Aujourd&apos;hui</SelectItem>
-                    <SelectItem value="week">Cette semaine</SelectItem>
-                    <SelectItem value="month">Ce mois-ci</SelectItem>
-                  </SelectContent>
-                </Select>
+                  onChange={setDateRange}
+                  className="w-full sm:flex-1"
+                />
 
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
