@@ -76,7 +76,7 @@ export function DateRangeFilter({
   hideIcon = false,
   className,
 }: DateRangeFilterProps) {
-  const handlePresetChange = (next: string | undefined) => {
+  const handlePresetChange = (next: string | null) => {
     const preset = (next ?? "") as DateRangePreset;
     if (preset !== "custom") {
       onChange({ preset });
