@@ -20,7 +20,7 @@ import {
   Mail,
   Truck,
 } from "lucide-react";
-import type { Doctor, VisitWithDetails } from "@/types";
+import type { Doctor, UserRole, VisitWithDetails } from "@/types";
 
 export default function DoctorDetailPage() {
   const params = useParams();
@@ -29,6 +29,7 @@ export default function DoctorDetailPage() {
   const [visits, setVisits] = useState<VisitWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEdit, setShowEdit] = useState(false);
+  const [userRole, setUserRole] = useState<UserRole>("delegue");
 
   const fetchDoctor = useCallback(async () => {
     setLoading(true);
@@ -49,6 +50,15 @@ export default function DoctorDetailPage() {
   useEffect(() => {
     fetchDoctor();
   }, [fetchDoctor]);
+
+  useEffect(() => {
+    fetch("/api/users?me=true")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.role) setUserRole(data.role);
+      })
+      .catch(() => {});
+  }, []);
 
   if (loading || !doctor) {
     return (
@@ -214,11 +224,16 @@ export default function DoctorDetailPage() {
           </DialogHeader>
           <DoctorForm
             initialData={doctor}
+            userRole={userRole}
             onSuccess={(updated) => {
               setDoctor(updated);
               setShowEdit(false);
             }}
             onCancel={() => setShowEdit(false)}
+            onDelete={() => {
+              setShowEdit(false);
+              router.push("/medecins");
+            }}
           />
         </DialogContent>
       </Dialog>

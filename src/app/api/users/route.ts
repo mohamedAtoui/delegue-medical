@@ -9,9 +9,24 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
+  const me = searchParams.get("me");
   const role = searchParams.get("role");
 
   const supabase = await createClient();
+
+  // Return current user only
+  if (me === "true") {
+    const { data: currentUser } = await supabase
+      .from("users")
+      .select("*")
+      .eq("clerk_id", userId)
+      .single();
+    if (!currentUser) {
+      return NextResponse.json({ error: "Utilisateur non trouvé" }, { status: 404 });
+    }
+    return NextResponse.json(currentUser);
+  }
+
   let query = supabase.from("users").select("*").order("last_name");
 
   if (role) {
