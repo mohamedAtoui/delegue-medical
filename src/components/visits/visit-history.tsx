@@ -12,6 +12,7 @@ interface VisitHistoryProps {
   fetchUrl?: string;
   typeFilter?: "all" | DoctorType;
   from?: string;
+  to?: string;
   wilaya?: string;
   userId?: string;
   search?: string;
@@ -58,6 +59,7 @@ export function VisitHistory({
   fetchUrl = "/api/visits",
   typeFilter = "all",
   from,
+  to,
   wilaya,
   userId,
   search,
@@ -84,6 +86,7 @@ export function VisitHistory({
       if (showUser) url.searchParams.set("all", "true");
       if (typeFilter !== "all") url.searchParams.set("type", typeFilter);
       if (from) url.searchParams.set("from", from);
+      if (to) url.searchParams.set("to", to);
       if (wilaya) url.searchParams.set("wilaya", wilaya);
       if (userId) url.searchParams.set("user_id", userId);
       if (search) url.searchParams.set("search", search);
@@ -96,7 +99,7 @@ export function VisitHistory({
     } finally {
       setLoading(false);
     }
-  }, [fetchUrl, showUser, page, typeFilter, from, wilaya, userId, search]);
+  }, [fetchUrl, showUser, page, typeFilter, from, to, wilaya, userId, search]);
 
   useEffect(() => {
     if (skipNext.current) {

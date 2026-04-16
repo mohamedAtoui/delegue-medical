@@ -13,6 +13,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DateRangeFilter,
+  resolveDateRange,
+  type DateRangeValue,
+} from "@/components/shared/date-range-filter";
 import { Sparkles, Send, Loader2, User, Bot } from "lucide-react";
 import type { User as UserType } from "@/types";
 
@@ -43,7 +48,7 @@ const EXAMPLE_PROMPTS = [
 export function AISummaryPanel() {
   const [wilaya, setWilaya] = useState("");
   const [delegue, setDelegue] = useState("");
-  const [dateRange, setDateRange] = useState("month");
+  const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: "month" });
   const [typeFilter, setTypeFilter] = useState("");
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -62,15 +67,6 @@ export function AISummaryPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const getDateFrom = () => {
-    const from = new Date();
-    if (dateRange === "today") from.setHours(0, 0, 0, 0);
-    else if (dateRange === "week") from.setDate(from.getDate() - 7);
-    else if (dateRange === "month") from.setMonth(from.getMonth() - 1);
-    else return undefined;
-    return from.toISOString();
-  };
-
   const askAI = async (question: string) => {
     if (!question.trim()) return;
 
@@ -79,6 +75,8 @@ export function AISummaryPanel() {
     setPrompt("");
     setLoading(true);
 
+    const { from, to } = resolveDateRange(dateRange);
+
     try {
       const res = await fetch("/api/ai/summary", {
         method: "POST",
@@ -86,7 +84,8 @@ export function AISummaryPanel() {
         body: JSON.stringify({
           wilaya: wilaya || undefined,
           user_id: delegue || undefined,
-          from: getDateFrom(),
+          from,
+          to,
           type: typeFilter || undefined,
           prompt: question,
         }),
@@ -130,7 +129,7 @@ export function AISummaryPanel() {
       </CardHeader>
       <CardContent className="flex flex-col gap-4 flex-1">
         {/* Filters */}
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid gap-2 sm:grid-cols-3">
           <WilayaSelect
             value={wilaya}
             onValueChange={setWilaya}
@@ -159,17 +158,8 @@ export function AISummaryPanel() {
               <SelectItem value="pharmacien">Pharmaciens</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={dateRange} onValueChange={(v) => setDateRange(v ?? "month")}>
-            <SelectTrigger>
-              <SelectValue placeholder="Période" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">Aujourd&apos;hui</SelectItem>
-              <SelectItem value="week">Cette semaine</SelectItem>
-              <SelectItem value="month">Ce mois-ci</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
+        <DateRangeFilter value={dateRange} onChange={setDateRange} required />
 
         {/* Messages */}
         <div className="flex-1 min-h-[200px] max-h-[400px] overflow-y-auto space-y-3 rounded-lg border border-border/50 p-3 bg-muted/10">

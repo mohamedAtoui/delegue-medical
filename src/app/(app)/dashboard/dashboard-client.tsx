@@ -5,9 +5,14 @@ import { StatsCards } from "@/components/dashboard/stats-cards";
 import { Charts } from "@/components/dashboard/charts";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { AISummaryPanel } from "@/components/dashboard/ai-summary-panel";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { MedicalLoader } from "@/components/ui/medical-loader";
+import {
+  DateRangeFilter,
+  resolveDateRange,
+  TODAY,
+  type DateRangeValue,
+} from "@/components/shared/date-range-filter";
 import { Download } from "lucide-react";
 import type { DashboardStats } from "@/lib/queries/stats";
 import type { VisitWithDetails } from "@/types";
@@ -22,7 +27,8 @@ export function DashboardClient({
   initialVisits,
 }: DashboardClientProps) {
   const [stats, setStats] = useState<DashboardStats>(initialStats);
-  const [period, setPeriod] = useState<"today" | "week" | "month">("today");
+  // Default matches the server-rendered initial fetch (today).
+  const [dateRange, setDateRange] = useState<DateRangeValue>(TODAY);
   const [refetching, setRefetching] = useState(false);
   const skipNext = useRef(true);
 
@@ -31,18 +37,14 @@ export function DashboardClient({
       skipNext.current = false;
       return;
     }
+    const { from, to } = resolveDateRange(dateRange);
+    if (!from || !to) return; // custom range with empty inputs — wait
     const ctrl = new AbortController();
-    const now = new Date();
-    const from = new Date();
-    if (period === "today") from.setHours(0, 0, 0, 0);
-    else if (period === "week") from.setDate(now.getDate() - 7);
-    else from.setMonth(now.getMonth() - 1);
 
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: show loader before fetch starts
     setRefetching(true);
-    fetch(`/api/stats?from=${from.toISOString()}&to=${now.toISOString()}`, {
-      signal: ctrl.signal,
-    })
+    const params = new URLSearchParams({ from, to });
+    fetch(`/api/stats?${params}`, { signal: ctrl.signal })
       .then((res) => res.json())
       .then((data) => setStats(data))
       .catch((err) => {
@@ -51,7 +53,7 @@ export function DashboardClient({
       .finally(() => setRefetching(false));
 
     return () => ctrl.abort();
-  }, [period]);
+  }, [dateRange]);
 
   return (
     <div className="space-y-6">
@@ -63,17 +65,13 @@ export function DashboardClient({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Tabs
-            value={period}
-            onValueChange={(v) => setPeriod(v as typeof period)}
-          >
-            <TabsList>
-              <TabsTrigger value="today">Aujourd&apos;hui</TabsTrigger>
-              <TabsTrigger value="week">Semaine</TabsTrigger>
-              <TabsTrigger value="month">Mois</TabsTrigger>
-            </TabsList>
-          </Tabs>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <DateRangeFilter
+            value={dateRange}
+            onChange={setDateRange}
+            required
+            className="min-w-[220px]"
+          />
           <Button
             variant="outline"
             size="sm"
