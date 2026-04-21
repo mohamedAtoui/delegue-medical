@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
@@ -17,10 +18,17 @@ import {
   MapPin,
   Send,
   ImagePlus,
+  CalendarPlus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { DeadlineSelect } from "@/components/assignments/deadline-select";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -45,9 +53,15 @@ function MiniYesNo({ value, label }: { value: boolean | null; label: string }) {
 export function InlineComments({
   visitId,
   visitAuthorId,
+  doctorId,
+  doctorName,
+  doctorIsPharmacien,
 }: {
   visitId: string;
   visitAuthorId: string;
+  doctorId?: string;
+  doctorName?: string;
+  doctorIsPharmacien?: boolean;
 }) {
   const [comments, setComments] = useState<VisitComment[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -58,6 +72,41 @@ export function InlineComments({
   const [showAll, setShowAll] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // Plan-next-visit popover state
+  const [planOpen, setPlanOpen] = useState(false);
+  const [planDeadline, setPlanDeadline] = useState("");
+  const [planNote, setPlanNote] = useState("");
+  const [planSaving, setPlanSaving] = useState(false);
+
+  const submitPlan = async () => {
+    if (!doctorId || !planDeadline) return;
+    setPlanSaving(true);
+    try {
+      const res = await fetch("/api/assignments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assignee_id: "self",
+          doctor_id: doctorId,
+          deadline: planDeadline,
+          note: planNote || null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Erreur");
+      }
+      toast.success("Prochaine visite planifiée");
+      setPlanOpen(false);
+      setPlanDeadline("");
+      setPlanNote("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur");
+    } finally {
+      setPlanSaving(false);
+    }
+  };
 
   const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -335,6 +384,76 @@ export function InlineComments({
           >
             <ImagePlus className="h-3 w-3" />
           </Button>
+          {doctorId && (
+            <Popover open={planOpen} onOpenChange={setPlanOpen}>
+              <PopoverTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="cursor-pointer shrink-0 self-end h-8 w-8 p-0"
+                    aria-label="Planifier la prochaine visite"
+                    title="Planifier la prochaine visite"
+                  >
+                    <CalendarPlus className="h-3 w-3" />
+                  </Button>
+                }
+              />
+              <PopoverContent
+                className="w-80 p-3 space-y-3"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-foreground">
+                    Planifier la prochaine visite
+                  </p>
+                  {doctorName && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {doctorIsPharmacien ? "" : "Dr. "}
+                      {doctorName}
+                    </p>
+                  )}
+                </div>
+                <DeadlineSelect
+                  value={planDeadline}
+                  onChange={setPlanDeadline}
+                />
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-foreground/80">
+                    Note (optionnel)
+                  </label>
+                  <Textarea
+                    value={planNote}
+                    onChange={(e) => setPlanNote(e.target.value)}
+                    placeholder="Rappel ou objectif..."
+                    className="min-h-[50px] resize-none text-xs"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPlanOpen(false)}
+                    className="cursor-pointer h-8"
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={planSaving || !planDeadline}
+                    onClick={submitPlan}
+                    className="cursor-pointer h-8"
+                  >
+                    <CalendarPlus className="h-3 w-3 mr-1" />
+                    {planSaving ? "..." : "Planifier"}
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
           <Button
             type="submit"
             size="sm"
@@ -453,10 +572,14 @@ export function VisitEntry({
                   )}
                 </div>
               )}
-              <span className="text-sm font-semibold truncate">
+              <Link
+                href={`/medecins/${visit.doctor_id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="text-sm font-semibold truncate hover:underline cursor-pointer"
+              >
                 {isPharm ? "" : "Dr. "}
                 {visit.doctor.last_name} {visit.doctor.first_name}
-              </span>
+              </Link>
               {visit.doctor.specialty && (
                 <Badge
                   variant="secondary"
@@ -466,9 +589,12 @@ export function VisitEntry({
                 </Badge>
               )}
               {visit.doctor.wilaya && (
-                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground shrink-0">
-                  <MapPin className="h-2.5 w-2.5" />
-                  {visit.doctor.wilaya}
+                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground min-w-0">
+                  <MapPin className="h-2.5 w-2.5 shrink-0" />
+                  <span className="truncate">
+                    {visit.doctor.wilaya}
+                    {visit.doctor.address ? ` — ${visit.doctor.address}` : ""}
+                  </span>
                 </span>
               )}
             </div>
@@ -644,7 +770,17 @@ export function VisitEntry({
           )}
 
           {/* Comments with inline input */}
-          <InlineComments visitId={visit.id} visitAuthorId={visit.user_id} />
+          <InlineComments
+            visitId={visit.id}
+            visitAuthorId={visit.user_id}
+            doctorId={visit.doctor_id}
+            doctorName={
+              visit.doctor
+                ? `${visit.doctor.last_name} ${visit.doctor.first_name}`.trim()
+                : undefined
+            }
+            doctorIsPharmacien={isPharm}
+          />
         </div>
       )}
     </div>

@@ -13,6 +13,7 @@ interface DoctorGroup {
   doctorName: string;
   specialty: string | null;
   wilaya: string;
+  address: string | null;
   doctorType: DoctorType;
   visits: VisitWithDetails[];
 }
@@ -71,6 +72,7 @@ export function ActivityFeed({ initialVisits }: ActivityFeedProps = {}) {
           doctorName: `${isPharm ? "" : "Dr. "}${visit.doctor?.last_name || ""} ${visit.doctor?.first_name || ""}`.trim(),
           specialty: visit.doctor?.specialty || null,
           wilaya: visit.doctor?.wilaya || "",
+          address: visit.doctor?.address || null,
           doctorType: (visit.doctor?.doctor_type || "medecin") as DoctorType,
           visits: [],
         });
@@ -108,9 +110,11 @@ export function ActivityFeed({ initialVisits }: ActivityFeedProps = {}) {
             {groups.map((group) => (
               <DoctorVisitGroup
                 key={group.doctorId}
+                doctorId={group.doctorId}
                 doctorName={group.doctorName}
                 specialty={group.specialty}
                 wilaya={group.wilaya}
+                address={group.address}
                 visits={group.visits}
                 doctorType={group.doctorType}
                 showUser

@@ -197,9 +197,11 @@ export default function DoctorDetailPage() {
       {/* Visit history */}
       {visits.length > 0 ? (
         <DoctorVisitGroup
+          doctorId={doctor.id}
           doctorName={`${isPharmacien ? "" : "Dr. "}${doctor.last_name} ${doctor.first_name}`.trim()}
           specialty={doctor.specialty || null}
           wilaya={doctor.wilaya || ""}
+          address={doctor.address || null}
           visits={visits}
           doctorType={doctor.doctor_type as import("@/types").DoctorType}
           showUser

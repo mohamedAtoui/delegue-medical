@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,9 +23,11 @@ import type { VisitWithDetails, DoctorType } from "@/types";
 export { InlineComments } from "@/components/visits/visit-entry";
 
 interface DoctorVisitGroupProps {
+  doctorId?: string;
   doctorName: string;
   specialty: string | null;
   wilaya: string;
+  address?: string | null;
   visits: VisitWithDetails[];
   doctorType?: DoctorType;
   showUser?: boolean;
@@ -33,9 +36,11 @@ interface DoctorVisitGroupProps {
 }
 
 export function DoctorVisitGroup({
+  doctorId,
   doctorName,
   specialty,
   wilaya,
+  address,
   visits,
   doctorType,
   showUser = false,
@@ -73,7 +78,17 @@ export function DoctorVisitGroup({
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-sm">{doctorName}</span>
+                {doctorId ? (
+                  <Link
+                    href={`/medecins/${doctorId}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="font-semibold text-sm hover:underline cursor-pointer"
+                  >
+                    {doctorName}
+                  </Link>
+                ) : (
+                  <span className="font-semibold text-sm">{doctorName}</span>
+                )}
                 {specialty && (
                   <Badge variant="secondary" className="text-xs">
                     {specialty}
@@ -81,9 +96,12 @@ export function DoctorVisitGroup({
                 )}
               </div>
               <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">
-                <span className="flex items-center gap-1">
-                  <MapPin className="h-3 w-3" />
-                  {wilaya}
+                <span className="flex items-center gap-1 min-w-0">
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  <span className="truncate">
+                    {wilaya}
+                    {address ? ` — ${address}` : ""}
+                  </span>
                 </span>
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />

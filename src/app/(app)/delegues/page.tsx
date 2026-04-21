@@ -164,9 +164,11 @@ export default function DeleguesPage() {
       const map = new Map<
         string,
         {
+          doctorId: string;
           doctorName: string;
           specialty: string | null;
           wilaya: string;
+          address: string | null;
           doctorType: DoctorType;
           visits: VisitWithDetails[];
         }
@@ -176,9 +178,11 @@ export default function DeleguesPage() {
         const isPharm = v.doctor?.doctor_type === "pharmacien";
         if (!map.has(id)) {
           map.set(id, {
+            doctorId: id,
             doctorName: `${isPharm ? "" : "Dr. "}${v.doctor?.last_name || ""} ${v.doctor?.first_name || ""}`.trim(),
             specialty: v.doctor?.specialty || null,
             wilaya: v.doctor?.wilaya || "",
+            address: v.doctor?.address || null,
             doctorType: (v.doctor?.doctor_type || "medecin") as DoctorType,
             visits: [],
           });
@@ -521,12 +525,14 @@ export default function DeleguesPage() {
                 </div>
               ) : groupedContent.type === "doctor" ? (
                 <div className="space-y-3">
-                  {groupedContent.groups.map((group, i) => (
+                  {groupedContent.groups.map((group) => (
                     <DoctorVisitGroup
-                      key={i}
+                      key={group.doctorId}
+                      doctorId={group.doctorId}
                       doctorName={group.doctorName}
                       specialty={group.specialty}
                       wilaya={group.wilaya}
+                      address={group.address}
                       visits={group.visits}
                       doctorType={group.doctorType}
                       showUser
