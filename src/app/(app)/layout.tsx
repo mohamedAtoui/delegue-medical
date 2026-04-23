@@ -17,7 +17,14 @@ export default async function AppLayout({
   }
 
   const user = await getOrCreateUser();
-  const role: UserRole = user?.role || "delegue";
+
+  // If Clerk session is valid but the user is not in our DB (not allowlisted),
+  // redirect to the non-autorise page instead of treating as a delegue.
+  if (!user) {
+    redirect("/non-autorise");
+  }
+
+  const role: UserRole = user.role || "delegue";
 
   // Check if delegate needs onboarding (no phone or no territories)
   if (user && role === "delegue" && !user.phone) {

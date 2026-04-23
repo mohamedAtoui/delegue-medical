@@ -15,6 +15,16 @@ export interface User {
   created_at: string;
   updated_at: string;
   wilayas?: string[];
+  daily_visit_goal?: number;
+  today_count?: number;
+}
+
+export interface Invitation {
+  id: string;
+  email: string;
+  invited_by: string | null;
+  created_at: string;
+  signed_up?: boolean;
 }
 
 export interface Product {

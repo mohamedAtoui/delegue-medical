@@ -50,6 +50,7 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [reps, setReps] = useState<User[]>([]);
+  const [me, setMe] = useState<User | null>(null);
 
   // Debounce search
   useEffect(() => {
@@ -65,6 +66,17 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
       .then((data) => setReps(Array.isArray(data) ? data : []))
       .catch(() => setReps([]));
   }, [isSupervisor]);
+
+  // Load current delegue's daily goal + today's count
+  useEffect(() => {
+    if (isSupervisor) return;
+    fetch("/api/users?me=true")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && !data.error) setMe(data);
+      })
+      .catch(() => setMe(null));
+  }, [isSupervisor, refreshKey]);
 
   const { from: fromIso, to: toIso } = resolveDateRange(dateRange);
 
@@ -135,6 +147,59 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
           <span className="sm:hidden">Nouveau</span>
         </Button>
       </div>
+
+      {/* Daily goal progress (delegue only, when goal is set) */}
+      {!isSupervisor && me && me.daily_visit_goal && me.daily_visit_goal > 0 && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-foreground">
+                  Objectif du jour
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  {me.today_count || 0} / {me.daily_visit_goal} visites
+                </span>
+              </div>
+              <span
+                className={cn(
+                  "text-base font-bold",
+                  (me.today_count || 0) >= me.daily_visit_goal
+                    ? "text-green-600"
+                    : "text-primary"
+                )}
+              >
+                {Math.min(
+                  100,
+                  Math.round(((me.today_count || 0) / me.daily_visit_goal) * 100)
+                )}
+                %
+              </span>
+            </div>
+            <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+              <div
+                className={cn(
+                  "h-full transition-all",
+                  (me.today_count || 0) >= me.daily_visit_goal
+                    ? "bg-green-500"
+                    : "bg-primary"
+                )}
+                style={{
+                  width: `${Math.min(
+                    100,
+                    ((me.today_count || 0) / me.daily_visit_goal) * 100
+                  )}%`,
+                }}
+              />
+            </div>
+            {(me.today_count || 0) >= me.daily_visit_goal && (
+              <p className="text-xs text-green-700 font-medium">
+                🎉 Objectif atteint, bravo !
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <div className="space-y-3">

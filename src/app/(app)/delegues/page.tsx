@@ -64,17 +64,32 @@ export default function DeleguesPage() {
   const [editWilayas, setEditWilayas] = useState<string[]>([]);
   const [savingWilayas, setSavingWilayas] = useState(false);
 
+  // Goal editing
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [editGoalValue, setEditGoalValue] = useState<string>("0");
+  const [savingGoal, setSavingGoal] = useState(false);
+
+  // Invitations
+  const [invites, setInvites] = useState<import("@/types").Invitation[]>([]);
+  const [showInvites, setShowInvites] = useState(false);
+  const [newInviteEmail, setNewInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+
   // View tab (visites vs planification)
   const [viewTab, setViewTab] = useState<"visites" | "planification">("visites");
 
   // (dialog removed — visits expand inline now)
 
-  useEffect(() => {
-    fetch("/api/users?role=delegue")
+  const fetchReps = useCallback(() => {
+    fetch("/api/users?role=delegue&with_today_count=true")
       .then((res) => res.json())
       .then((data) => setReps(Array.isArray(data) ? data : []))
       .catch(() => setReps([]));
   }, []);
+
+  useEffect(() => {
+    fetchReps();
+  }, [fetchReps]);
 
   const fetchVisits = useCallback(async (userId: string) => {
     setLoadingVisits(true);
@@ -261,6 +276,93 @@ export default function DeleguesPage() {
     }
   };
 
+  const saveGoal = async () => {
+    if (!selectedRep) return;
+    const goal = parseInt(editGoalValue, 10);
+    if (isNaN(goal) || goal < 0 || goal > 100) {
+      toast.error("Entrez un nombre entre 0 et 100");
+      return;
+    }
+    setSavingGoal(true);
+    try {
+      const res = await fetch(`/api/users/${selectedRep.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ daily_visit_goal: goal }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error);
+      }
+      setReps((prev) =>
+        prev.map((r) => (r.id === selectedRep.id ? { ...r, daily_visit_goal: goal } : r))
+      );
+      setSelectedRep((prev) => (prev ? { ...prev, daily_visit_goal: goal } : prev));
+      toast.success("Objectif mis à jour");
+      setEditingGoal(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur");
+    } finally {
+      setSavingGoal(false);
+    }
+  };
+
+  // Invitations
+  const fetchInvites = useCallback(async () => {
+    try {
+      const res = await fetch("/api/invitations");
+      const data = await res.json();
+      setInvites(Array.isArray(data) ? data : []);
+    } catch {
+      setInvites([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchInvites();
+  }, [fetchInvites]);
+
+  const addInvite = async () => {
+    const email = newInviteEmail.trim().toLowerCase();
+    if (!email || !email.includes("@")) {
+      toast.error("Email invalide");
+      return;
+    }
+    setInviting(true);
+    try {
+      const res = await fetch("/api/invitations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error);
+      }
+      toast.success("Invitation envoyée");
+      setNewInviteEmail("");
+      fetchInvites();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur");
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const deleteInvite = async (id: string) => {
+    try {
+      const res = await fetch(`/api/invitations/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error);
+      }
+      toast.success("Invitation supprimée");
+      fetchInvites();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -269,6 +371,98 @@ export default function DeleguesPage() {
           Consulter et analyser les visites de chaque délégué
         </p>
       </div>
+
+      {/* Invitations / allowlist manager */}
+      <Card>
+        <CardContent className="p-4">
+          <button
+            type="button"
+            onClick={() => setShowInvites(!showInvites)}
+            className="w-full flex items-center justify-between cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold">
+                Inviter un délégué
+              </span>
+              {invites.filter((i) => !i.signed_up).length > 0 && (
+                <Badge variant="outline" className="text-[10px]">
+                  {invites.filter((i) => !i.signed_up).length} en attente
+                </Badge>
+              )}
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {showInvites ? "Réduire" : "Gérer les invitations"}
+            </span>
+          </button>
+
+          {showInvites && (
+            <div className="mt-4 space-y-3 pt-3 border-t border-border/50">
+              <p className="text-xs text-muted-foreground">
+                Seuls les emails ajoutés ici peuvent créer un compte délégué.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  value={newInviteEmail}
+                  onChange={(e) => setNewInviteEmail(e.target.value)}
+                  placeholder="email@exemple.com"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addInvite();
+                    }
+                  }}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={addInvite}
+                  disabled={inviting || !newInviteEmail.trim()}
+                  className="cursor-pointer"
+                >
+                  {inviting ? "..." : "Inviter"}
+                </Button>
+              </div>
+
+              {invites.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic text-center py-2">
+                  Aucune invitation
+                </p>
+              ) : (
+                <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                  {invites.map((inv) => (
+                    <div
+                      key={inv.id}
+                      className="flex items-center justify-between gap-2 rounded-md border border-border/50 px-3 py-2 text-sm"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="truncate">{inv.email}</span>
+                        {inv.signed_up ? (
+                          <Badge className="bg-green-100 text-green-700 hover:bg-green-100 text-[10px]">
+                            Inscrit
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px]">
+                            En attente
+                          </Badge>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => deleteInvite(inv.id)}
+                        className="text-xs text-red-600 hover:underline cursor-pointer"
+                        title="Supprimer cette invitation"
+                      >
+                        Supprimer
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
         {/* Rep list */}
@@ -401,6 +595,72 @@ export default function DeleguesPage() {
                         </div>
                       )}
                     </div>
+                  </div>
+
+                  {/* Objectif du jour */}
+                  <div className="mt-4 pt-4 border-t border-border/40">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-foreground/80">
+                          Objectif du jour
+                        </span>
+                        {selectedRep.daily_visit_goal && selectedRep.daily_visit_goal > 0 ? (
+                          <span className="text-sm text-muted-foreground">
+                            {selectedRep.today_count || 0} / {selectedRep.daily_visit_goal} visites
+                            {" "}
+                            <span
+                              className={cn(
+                                "font-semibold",
+                                (selectedRep.today_count || 0) >= selectedRep.daily_visit_goal
+                                  ? "text-green-600"
+                                  : "text-amber-600"
+                              )}
+                            >
+                              ({Math.min(
+                                100,
+                                Math.round(
+                                  ((selectedRep.today_count || 0) / selectedRep.daily_visit_goal) *
+                                    100
+                                )
+                              )}
+                              %)
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground italic">
+                            Aucun objectif défini
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          setEditGoalValue(String(selectedRep.daily_visit_goal || 0));
+                          setEditingGoal(true);
+                        }}
+                        className="text-xs text-primary hover:underline cursor-pointer flex items-center gap-1"
+                      >
+                        <Pencil className="h-3 w-3" />
+                        Modifier
+                      </button>
+                    </div>
+                    {selectedRep.daily_visit_goal && selectedRep.daily_visit_goal > 0 && (
+                      <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                        <div
+                          className={cn(
+                            "h-full transition-all",
+                            (selectedRep.today_count || 0) >= selectedRep.daily_visit_goal
+                              ? "bg-green-500"
+                              : "bg-primary"
+                          )}
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              ((selectedRep.today_count || 0) / selectedRep.daily_visit_goal) * 100
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -624,6 +884,48 @@ export default function DeleguesPage() {
             >
               <Save className="mr-2 h-4 w-4" />
               {savingWilayas ? "Sauvegarde..." : "Sauvegarder"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Goal edit dialog */}
+      <Dialog open={editingGoal} onOpenChange={setEditingGoal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Objectif quotidien de {selectedRep?.first_name} {selectedRep?.last_name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              Nombre de visites attendues par jour. Mettez 0 pour désactiver l&apos;objectif.
+            </p>
+            <Input
+              type="number"
+              min="0"
+              max="100"
+              value={editGoalValue}
+              onChange={(e) => setEditGoalValue(e.target.value)}
+              placeholder="Ex: 8"
+              className="text-lg"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setEditingGoal(false)}
+              className="cursor-pointer"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={saveGoal}
+              disabled={savingGoal}
+              className="cursor-pointer"
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {savingGoal ? "Sauvegarde..." : "Sauvegarder"}
             </Button>
           </div>
         </DialogContent>

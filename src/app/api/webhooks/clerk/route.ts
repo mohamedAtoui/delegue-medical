@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 
+const SUPERVISOR_EMAILS = [
+  "attaimen40@gmail.com",
+  "sarl.handson@gmail.com",
+];
+
 interface ClerkWebhookEvent {
   type: string;
   data: {
@@ -18,12 +23,28 @@ export async function POST(request: NextRequest) {
   const supabase = createAdminClient();
 
   if (type === "user.created") {
+    const email = data.email_addresses[0]?.email_address ?? "";
+    const isSupervisor = SUPERVISOR_EMAILS.includes(email);
+
+    // Allowlist check
+    if (!isSupervisor && email) {
+      const { data: invite } = await supabase
+        .from("invited_users")
+        .select("id")
+        .ilike("email", email)
+        .maybeSingle();
+      if (!invite) {
+        console.warn(`Webhook blocked user creation: ${email} not in allowlist`);
+        return NextResponse.json({ success: true, skipped: true });
+      }
+    }
+
     const { error } = await supabase.from("users").insert({
       clerk_id: data.id,
-      email: data.email_addresses[0]?.email_address ?? "",
+      email,
       first_name: data.first_name,
       last_name: data.last_name,
-      role: "delegue",
+      role: isSupervisor ? "superviseur" : "delegue",
     });
 
     if (error) {

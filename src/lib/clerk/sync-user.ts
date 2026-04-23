@@ -40,6 +40,20 @@ export async function getOrCreateUser(): Promise<User | null> {
   if (!clerkUser) return null;
 
   const email = clerkUser.emailAddresses[0]?.emailAddress ?? "";
+  const isSupervisor = SUPERVISOR_EMAILS.includes(email);
+
+  // Allowlist check: only invited emails (or supervisors) can create an account
+  if (!isSupervisor && email) {
+    const { data: invite } = await supabase
+      .from("invited_users")
+      .select("id")
+      .ilike("email", email)
+      .maybeSingle();
+    if (!invite) {
+      console.warn(`Sign-up blocked: ${email} not in invited_users allowlist`);
+      return null;
+    }
+  }
 
   const { data: newUser, error } = await supabase
     .from("users")
@@ -49,7 +63,7 @@ export async function getOrCreateUser(): Promise<User | null> {
       first_name: clerkUser.firstName,
       last_name: clerkUser.lastName,
       avatar_url: clerkUser.imageUrl ?? null,
-      role: SUPERVISOR_EMAILS.includes(email) ? "superviseur" : "delegue",
+      role: isSupervisor ? "superviseur" : "delegue",
     })
     .select()
     .single();
