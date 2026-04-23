@@ -51,8 +51,14 @@ export interface Product {
   id: string;
   name: string;
   description: string | null;
+  reference: string | null;
+  laboratory: string | null;
+  quantity: number | null;
+  price: number | null;
+  notes: string | null;
   active: boolean;
   created_at: string;
+  updated_at?: string | null;
 }
 
 export interface Doctor {

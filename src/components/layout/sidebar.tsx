@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Users,
   CalendarCheck,
+  Package,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,7 @@ const allNavItems = [
   { href: "/planification", label: "Planification", icon: CalendarCheck, roles: ["delegue"] },
   { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard, roles: ["superviseur"] },
   { href: "/delegues", label: "Délégués", icon: Users, roles: ["superviseur"] },
+  { href: "/produits", label: "Produits", icon: Package, roles: ["superviseur"] },
 ];
 
 export function Sidebar({ currentPath, role }: { currentPath: string; role: UserRole }) {
