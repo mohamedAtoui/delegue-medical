@@ -27,6 +27,26 @@ export interface Invitation {
   signed_up?: boolean;
 }
 
+export type NotificationType =
+  | "comment"
+  | "comment_reply"
+  | "assignment_new"
+  | "assignment_due_soon"
+  | "assignment_overdue";
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  type: NotificationType;
+  title: string;
+  message: string | null;
+  link: string | null;
+  entity_id: string | null;
+  entity_type: string | null;
+  read: boolean;
+  created_at: string;
+}
+
 export interface Product {
   id: string;
   name: string;

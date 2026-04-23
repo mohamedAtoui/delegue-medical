@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/utils/supabase/server";
 import { getOrCreateUser } from "@/lib/clerk/sync-user";
 import { fetchAssignments } from "@/lib/queries/assignments";
+import { createNotifications } from "@/lib/notifications/create";
 
 export async function GET(request: NextRequest) {
   const { userId } = await auth();
@@ -90,6 +91,33 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Notify the assignee (skip if self-assigned)
+  if (data && assignee_id !== currentUser.id) {
+    try {
+      const isPharm = data.doctor?.doctor_type === "pharmacien";
+      const docName = `${isPharm ? "" : "Dr. "}${data.doctor?.last_name || ""} ${data.doctor?.first_name || ""}`.trim();
+      const supName = `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim() || "Le superviseur";
+      const deadlineDate = new Date(deadline);
+      const dateText = deadlineDate.toLocaleDateString("fr-FR", {
+        day: "numeric",
+        month: "long",
+      });
+      await createNotifications(supabase, [
+        {
+          user_id: assignee_id,
+          type: "assignment_new",
+          title: `${supName} vous a assigné une visite : ${docName}`,
+          message: `Échéance : ${dateText}`,
+          link: "/planification",
+          entity_id: data.id,
+          entity_type: "assignment",
+        },
+      ]);
+    } catch (e) {
+      console.error("Notification creation failed:", e);
+    }
   }
 
   return NextResponse.json(data, { status: 201 });

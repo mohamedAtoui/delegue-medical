@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { getOrCreateUser } from "@/lib/clerk/sync-user";
+import { createNotifications } from "@/lib/notifications/create";
 
 const COMMENT_IMAGE_BUCKET = "comment-images";
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -140,6 +141,56 @@ export async function POST(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Create notifications (silent on failure — never block comment creation)
+  try {
+    // Fetch visit author + parent comment author
+    const [{ data: visit }, parentRes] = await Promise.all([
+      supabase.from("visits").select("user_id").eq("id", id).single(),
+      parent_id
+        ? supabase
+            .from("visit_comments")
+            .select("user_id")
+            .eq("id", parent_id)
+            .single()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    const recipients = new Set<string>();
+    if (visit?.user_id && visit.user_id !== currentUser.id) {
+      recipients.add(visit.user_id);
+    }
+    const parent = (parentRes as { data: { user_id?: string } | null }).data;
+    if (parent?.user_id && parent.user_id !== currentUser.id) {
+      recipients.add(parent.user_id);
+    }
+
+    if (recipients.size > 0) {
+      const authorName = `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim() || "Quelqu'un";
+      const isReply = !!parent_id;
+      const preview = content
+        ? content.length > 60
+          ? content.slice(0, 60) + "…"
+          : content
+        : "(image)";
+      await createNotifications(
+        supabase,
+        Array.from(recipients).map((user_id) => ({
+          user_id,
+          type: isReply ? ("comment_reply" as const) : ("comment" as const),
+          title: isReply
+            ? `${authorName} a répondu à un commentaire`
+            : `${authorName} a commenté votre visite`,
+          message: preview,
+          link: "/visites",
+          entity_id: id,
+          entity_type: "visit",
+        }))
+      );
+    }
+  } catch (e) {
+    console.error("Notification creation failed:", e);
   }
 
   return NextResponse.json(data, { status: 201 });
