@@ -9,6 +9,7 @@ import {
   Search,
   AlertTriangle,
   CheckCircle2,
+  ListChecks,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ProductQuestionsDialog } from "@/components/produits/product-questions-dialog";
 import type { Product } from "@/types";
 
 interface ProductForm {
@@ -69,6 +71,7 @@ export function ProduitsClient() {
   const [saving, setSaving] = useState(false);
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [questionsFor, setQuestionsFor] = useState<Product | null>(null);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -340,6 +343,14 @@ export function ProduitsClient() {
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
+                        onClick={() => setQuestionsFor(p)}
+                        className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                        title="Questions de visite"
+                      >
+                        <ListChecks className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => openEdit(p)}
                         className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                         title="Modifier"
@@ -473,6 +484,13 @@ export function ProduitsClient() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Per-product question editor */}
+      <ProductQuestionsDialog
+        product={questionsFor}
+        open={!!questionsFor}
+        onOpenChange={(o) => !o && setQuestionsFor(null)}
+      />
 
       {/* Delete confirmation */}
       <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>

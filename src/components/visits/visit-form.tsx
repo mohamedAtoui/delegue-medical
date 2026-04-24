@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -18,68 +18,67 @@ import { DoctorForm } from "@/components/doctors/doctor-form";
 import { DoctorVisitTimeline } from "@/components/visits/doctor-visit-timeline";
 import { DeadlineSelect } from "@/components/assignments/deadline-select";
 import { YesNoToggle } from "@/components/visits/yes-no-toggle";
+import { ProductSelect } from "@/components/shared/product-select";
 import { toast } from "sonner";
 import { Send, Stethoscope, Pill, CalendarCheck, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Doctor, VisitType } from "@/types";
+import type {
+  Doctor,
+  ProductQuestion,
+  VisitType,
+  VisibleWhenRule,
+} from "@/types";
 
 interface VisitFormProps {
   onSuccess: () => void;
 }
 
-type MedecinForm = {
-  objective: string;
-  compte_rendu: string;
-  synapgen_solves: boolean | null;
-  already_prescribed: boolean | null;
-  promised_to_suggest: boolean | null;
-  price_objection: boolean | null;
-  prescribes_magnesium: boolean | null;
-  magnesium_brand: string;
-  fears_side_effects: boolean | null;
-  patient_feedback: boolean | null;
-  patient_feedback_comment: string;
-  ordonnance_return: boolean | null;
-  free_sample: boolean | null;
+/** Answer keyed by question_id. Only one of the three value slots is set. */
+type AnswerValue = {
+  value_boolean?: boolean | null;
+  value_text?: string;
+  value_number?: string; // kept as string while typing
 };
 
-type PharmacienForm = {
-  compte_rendu: string;
-  synapgen_count: string;
-  prescriptions_received: string;
-  prescribing_doctor: string;
-  accepted_order: boolean | null;
-};
+type AnswersMap = Record<string, AnswerValue>;
 
-const emptyMedecin: MedecinForm = {
-  objective: "",
-  compte_rendu: "",
-  synapgen_solves: null,
-  already_prescribed: null,
-  promised_to_suggest: null,
-  price_objection: null,
-  prescribes_magnesium: null,
-  magnesium_brand: "",
-  fears_side_effects: null,
-  patient_feedback: null,
-  patient_feedback_comment: "",
-  ordonnance_return: null,
-  free_sample: null,
-};
-
-const emptyPharmacien: PharmacienForm = {
-  compte_rendu: "",
-  synapgen_count: "",
-  prescriptions_received: "",
-  prescribing_doctor: "",
-  accepted_order: null,
-};
+/**
+ * Evaluate a question's visibility rule against the current answers.
+ * Unknown rule shapes fail open so future server-side rule changes don't
+ * silently hide questions in old clients.
+ */
+function isVisible(
+  rule: VisibleWhenRule | null,
+  answers: AnswersMap,
+  questionsById: Map<string, ProductQuestion>
+): boolean {
+  if (!rule) return true;
+  if (rule.op === "eq") {
+    const parent = questionsById.get(rule.question_id);
+    if (!parent) return true;
+    const a = answers[rule.question_id];
+    if (!a) return false;
+    if (parent.input_type === "yes_no") {
+      return a.value_boolean === rule.value;
+    }
+    if (parent.input_type === "number") {
+      const n = a.value_number ? Number(a.value_number) : null;
+      return n === rule.value;
+    }
+    return (a.value_text ?? null) === rule.value;
+  }
+  return true;
+}
 
 export function VisitForm({ onSuccess }: VisitFormProps) {
   const [visitType, setVisitType] = useState<VisitType>("medecin");
+  const [productId, setProductId] = useState<string>("");
   const [doctor, setDoctor] = useState<Doctor | null>(null);
-  const [medecinForm, setMedecinForm] = useState<MedecinForm>(emptyMedecin);
-  const [pharmacienForm, setPharmacienForm] = useState<PharmacienForm>(emptyPharmacien);
+  const [objective, setObjective] = useState("");
+  const [compteRendu, setCompteRendu] = useState("");
+  const [answers, setAnswers] = useState<AnswersMap>({});
+  const [questions, setQuestions] = useState<ProductQuestion[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showDoctorForm, setShowDoctorForm] = useState(false);
 
@@ -92,74 +91,116 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
     if (t === visitType) return;
     setVisitType(t);
     setDoctor(null);
+    setAnswers({});
+  };
+
+  // Reload questions whenever product or visit type changes.
+  const loadQuestions = useCallback(async () => {
+    if (!productId) {
+      setQuestions([]);
+      return;
+    }
+    setLoadingQuestions(true);
+    try {
+      const res = await fetch(
+        `/api/products/${productId}/questions?target_role=${visitType}`
+      );
+      const data = await res.json();
+      setQuestions(Array.isArray(data) ? data : []);
+    } catch {
+      setQuestions([]);
+    } finally {
+      setLoadingQuestions(false);
+    }
+  }, [productId, visitType]);
+
+  useEffect(() => {
+    loadQuestions();
+    setAnswers({});
+  }, [loadQuestions]);
+
+  const questionsById = new Map(questions.map((q) => [q.id, q]));
+
+  const setAnswer = (id: string, update: AnswerValue) => {
+    setAnswers((prev) => ({ ...prev, [id]: update }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!doctor) {
-      toast.error(`Veuillez sélectionner un ${visitType === "pharmacien" ? "pharmacien" : "médecin"}`);
+    if (!productId) {
+      toast.error("Veuillez sélectionner un produit");
       return;
     }
-
+    if (!doctor) {
+      toast.error(
+        `Veuillez sélectionner un ${visitType === "pharmacien" ? "pharmacien" : "médecin"}`
+      );
+      return;
+    }
     if (visitType === "medecin") {
-      if (!medecinForm.objective.trim()) {
+      if (!objective.trim()) {
         toast.error("L'objectif de la visite est requis");
         return;
       }
-      if (!medecinForm.compte_rendu.trim()) {
+      if (!compteRendu.trim()) {
         toast.error("Le compte rendu est requis");
         return;
       }
-    } else {
-      if (!pharmacienForm.compte_rendu.trim()) {
-        toast.error("Le commentaire est requis");
+    } else if (!compteRendu.trim()) {
+      toast.error("Le commentaire est requis");
+      return;
+    }
+
+    // Required-question validation, skipping questions hidden by rules.
+    for (const q of questions) {
+      if (!q.required) continue;
+      if (!isVisible(q.visible_when, answers, questionsById)) continue;
+      const a = answers[q.id];
+      const filled =
+        a &&
+        ((q.input_type === "yes_no" && a.value_boolean !== null && a.value_boolean !== undefined) ||
+          (q.input_type === "short_text" && !!a.value_text?.trim()) ||
+          (q.input_type === "textarea" && !!a.value_text?.trim()) ||
+          (q.input_type === "number" && a.value_number !== undefined && a.value_number !== ""));
+      if (!filled) {
+        toast.error(`Question obligatoire : ${q.label}`);
         return;
       }
     }
 
     setLoading(true);
     try {
-      const payload: Record<string, unknown> = {
-        doctor_id: doctor.id,
-        visit_type: visitType,
-      };
+      // Build answers[] payload, including only visible + filled rows.
+      const answersPayload = questions
+        .filter((q) => isVisible(q.visible_when, answers, questionsById))
+        .map((q) => {
+          const a = answers[q.id];
+          if (!a) return null;
+          if (q.input_type === "yes_no") {
+            if (a.value_boolean === null || a.value_boolean === undefined) return null;
+            return { question_id: q.id, value_boolean: a.value_boolean };
+          }
+          if (q.input_type === "number") {
+            if (a.value_number === undefined || a.value_number === "") return null;
+            const n = Number(a.value_number);
+            if (Number.isNaN(n)) return null;
+            return { question_id: q.id, value_number: n };
+          }
+          const text = a.value_text?.trim();
+          if (!text) return null;
+          return { question_id: q.id, value_text: text };
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null);
 
-      if (visitType === "medecin") {
-        Object.assign(payload, {
-          objective: medecinForm.objective.trim(),
-          compte_rendu: medecinForm.compte_rendu.trim(),
-          synapgen_solves: medecinForm.synapgen_solves,
-          already_prescribed: medecinForm.already_prescribed,
-          promised_to_suggest: medecinForm.promised_to_suggest,
-          price_objection: medecinForm.price_objection,
-          prescribes_magnesium: medecinForm.prescribes_magnesium,
-          magnesium_brand:
-            medecinForm.prescribes_magnesium === true
-              ? medecinForm.magnesium_brand.trim() || null
-              : null,
-          fears_side_effects: medecinForm.fears_side_effects,
-          patient_feedback: medecinForm.patient_feedback,
-          patient_feedback_comment:
-            medecinForm.patient_feedback === true
-              ? medecinForm.patient_feedback_comment.trim() || null
-              : null,
-          ordonnance_return: medecinForm.ordonnance_return,
-          free_sample: medecinForm.free_sample,
-        });
-      } else {
-        Object.assign(payload, {
-          compte_rendu: pharmacienForm.compte_rendu.trim(),
-          synapgen_count: pharmacienForm.synapgen_count
-            ? parseInt(pharmacienForm.synapgen_count, 10)
-            : null,
-          prescriptions_received: pharmacienForm.prescriptions_received
-            ? parseInt(pharmacienForm.prescriptions_received, 10)
-            : null,
-          prescribing_doctor: pharmacienForm.prescribing_doctor.trim() || null,
-          accepted_order: pharmacienForm.accepted_order,
-        });
-      }
+      const payload = {
+        doctor_id: doctor.id,
+        product_id: productId,
+        visit_type: visitType,
+        objective: visitType === "medecin" ? objective.trim() : null,
+        compte_rendu: compteRendu.trim(),
+        answers: answersPayload,
+      };
 
       const res = await fetch("/api/visits", {
         method: "POST",
@@ -201,8 +242,9 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
 
       // Reset form
       setDoctor(null);
-      setMedecinForm(emptyMedecin);
-      setPharmacienForm(emptyPharmacien);
+      setObjective("");
+      setCompteRendu("");
+      setAnswers({});
       setPlanNext(false);
       setNextDeadline("");
       setNextNote("");
@@ -214,9 +256,19 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
     }
   };
 
+  const visibleQuestions = questions.filter((q) =>
+    isVisible(q.visible_when, answers, questionsById)
+  );
+
   return (
     <>
       <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Product picker */}
+        <div className="space-y-2">
+          <Label>Produit *</Label>
+          <ProductSelect value={productId} onValueChange={setProductId} />
+        </div>
+
         {/* Type selector */}
         <div className="space-y-2">
           <Label>Type de visite *</Label>
@@ -270,189 +322,63 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
           </>
         )}
 
-        {/* Médecin form */}
+        {/* Objective (médecin only) */}
         {visitType === "medecin" && (
-          <div className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="objective">Objectif de la visite *</Label>
-              <Input
-                id="objective"
-                value={medecinForm.objective}
-                onChange={(e) =>
-                  setMedecinForm({ ...medecinForm, objective: e.target.value })
-                }
-                placeholder="Présenter Synapgen, suivre un retour, etc."
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="compte_rendu">Compte rendu de la visite *</Label>
-              <Textarea
-                id="compte_rendu"
-                value={medecinForm.compte_rendu}
-                onChange={(e) =>
-                  setMedecinForm({ ...medecinForm, compte_rendu: e.target.value })
-                }
-                placeholder="Décrivez le déroulement de la visite..."
-                className="min-h-[120px] resize-none"
-              />
-            </div>
-
-            {/* Checklist */}
-            <Card className="bg-muted/20">
-              <CardContent className="p-4 space-y-3">
-                <p className="text-sm font-semibold text-foreground/90">Évaluation</p>
-
-                <YesNoToggle
-                  label="Synapgen répond-il aux besoins de ses patients ?"
-                  value={medecinForm.synapgen_solves}
-                  onChange={(v) => setMedecinForm({ ...medecinForm, synapgen_solves: v })}
-                />
-                <YesNoToggle
-                  label="A-t-il déjà prescrit le produit ?"
-                  value={medecinForm.already_prescribed}
-                  onChange={(v) => setMedecinForm({ ...medecinForm, already_prescribed: v })}
-                />
-                <YesNoToggle
-                  label="A-t-il promis de le suggérer ?"
-                  value={medecinForm.promised_to_suggest}
-                  onChange={(v) => setMedecinForm({ ...medecinForm, promised_to_suggest: v })}
-                />
-                <YesNoToggle
-                  label="Objection prix ?"
-                  value={medecinForm.price_objection}
-                  onChange={(v) => setMedecinForm({ ...medecinForm, price_objection: v })}
-                />
-                <YesNoToggle
-                  label="Prescrit-il beaucoup de magnésium ?"
-                  value={medecinForm.prescribes_magnesium}
-                  onChange={(v) =>
-                    setMedecinForm({ ...medecinForm, prescribes_magnesium: v })
-                  }
-                />
-                {medecinForm.prescribes_magnesium === true && (
-                  <Input
-                    value={medecinForm.magnesium_brand}
-                    onChange={(e) =>
-                      setMedecinForm({ ...medecinForm, magnesium_brand: e.target.value })
-                    }
-                    placeholder="Quelle marque ?"
-                    className="ml-2"
-                  />
-                )}
-                <YesNoToggle
-                  label="Crainte d'effets secondaires ?"
-                  value={medecinForm.fears_side_effects}
-                  onChange={(v) => setMedecinForm({ ...medecinForm, fears_side_effects: v })}
-                />
-                <YesNoToggle
-                  label="Retours de patients reçus ?"
-                  value={medecinForm.patient_feedback}
-                  onChange={(v) => setMedecinForm({ ...medecinForm, patient_feedback: v })}
-                />
-                {medecinForm.patient_feedback === true && (
-                  <Textarea
-                    value={medecinForm.patient_feedback_comment}
-                    onChange={(e) =>
-                      setMedecinForm({
-                        ...medecinForm,
-                        patient_feedback_comment: e.target.value,
-                      })
-                    }
-                    placeholder="Détails des retours patients..."
-                    className="ml-2 min-h-[70px] resize-none"
-                  />
-                )}
-                <YesNoToggle
-                  label="A-t-il reçu un retour d'ordonnance ?"
-                  value={medecinForm.ordonnance_return}
-                  onChange={(v) => setMedecinForm({ ...medecinForm, ordonnance_return: v })}
-                />
-                <YesNoToggle
-                  label="Échantillon gratuit donné pendant cette visite ?"
-                  value={medecinForm.free_sample}
-                  onChange={(v) => setMedecinForm({ ...medecinForm, free_sample: v })}
-                />
-              </CardContent>
-            </Card>
+          <div className="space-y-2">
+            <Label htmlFor="objective">Objectif de la visite *</Label>
+            <Input
+              id="objective"
+              value={objective}
+              onChange={(e) => setObjective(e.target.value)}
+              placeholder="Présenter le produit, suivre un retour, etc."
+            />
           </div>
         )}
 
-        {/* Pharmacien form */}
-        {visitType === "pharmacien" && (
-          <div className="space-y-5">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="synapgen_count">Nombre de Synapgen en stock</Label>
-                <Input
-                  id="synapgen_count"
-                  type="number"
-                  min="0"
-                  value={pharmacienForm.synapgen_count}
-                  onChange={(e) =>
-                    setPharmacienForm({ ...pharmacienForm, synapgen_count: e.target.value })
-                  }
-                  placeholder="0"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="prescriptions_received">Nombre de prescriptions reçues</Label>
-                <Input
-                  id="prescriptions_received"
-                  type="number"
-                  min="0"
-                  value={pharmacienForm.prescriptions_received}
-                  onChange={(e) =>
-                    setPharmacienForm({
-                      ...pharmacienForm,
-                      prescriptions_received: e.target.value,
-                    })
-                  }
-                  placeholder="0"
-                />
-              </div>
-            </div>
+        {/* Compte rendu */}
+        <div className="space-y-2">
+          <Label htmlFor="compte_rendu">
+            {visitType === "medecin" ? "Compte rendu de la visite *" : "Commentaire *"}
+          </Label>
+          <Textarea
+            id="compte_rendu"
+            value={compteRendu}
+            onChange={(e) => setCompteRendu(e.target.value)}
+            placeholder={
+              visitType === "medecin"
+                ? "Décrivez le déroulement de la visite..."
+                : "Observations, remarques..."
+            }
+            className="min-h-[120px] resize-none"
+          />
+        </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="prescribing_doctor">Prescriptions de quel médecin ?</Label>
-              <Input
-                id="prescribing_doctor"
-                value={pharmacienForm.prescribing_doctor}
-                onChange={(e) =>
-                  setPharmacienForm({
-                    ...pharmacienForm,
-                    prescribing_doctor: e.target.value,
-                  })
-                }
-                placeholder="Nom du médecin prescripteur"
-              />
-            </div>
-
-            <Card className="bg-muted/20">
-              <CardContent className="p-4">
-                <YesNoToggle
-                  label="A-t-il accepté de faire une commande (bon de commande) ?"
-                  value={pharmacienForm.accepted_order}
-                  onChange={(v) =>
-                    setPharmacienForm({ ...pharmacienForm, accepted_order: v })
-                  }
-                />
-              </CardContent>
-            </Card>
-
-            <div className="space-y-2">
-              <Label htmlFor="pharma_comment">Commentaire *</Label>
-              <Textarea
-                id="pharma_comment"
-                value={pharmacienForm.compte_rendu}
-                onChange={(e) =>
-                  setPharmacienForm({ ...pharmacienForm, compte_rendu: e.target.value })
-                }
-                placeholder="Observations, remarques..."
-                className="min-h-[120px] resize-none"
-              />
-            </div>
-          </div>
+        {/* Dynamic per-product questions */}
+        {productId && (
+          <Card className="bg-muted/20">
+            <CardContent className="p-4 space-y-3">
+              <p className="text-sm font-semibold text-foreground/90">
+                {visitType === "medecin" ? "Évaluation" : "Relevé"}
+              </p>
+              {loadingQuestions ? (
+                <p className="text-xs text-muted-foreground">Chargement…</p>
+              ) : visibleQuestions.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Aucune question configurée pour ce produit. Le superviseur
+                  peut en ajouter depuis la page Produits.
+                </p>
+              ) : (
+                visibleQuestions.map((q) => (
+                  <QuestionInput
+                    key={q.id}
+                    question={q}
+                    answer={answers[q.id]}
+                    onChange={(update) => setAnswer(q.id, update)}
+                  />
+                ))
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* Optional: Plan next visit (only shows when doctor is selected) */}
@@ -513,7 +439,7 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
 
         <Button
           type="submit"
-          disabled={loading || !doctor || (planNext && !nextDeadline)}
+          disabled={loading || !doctor || !productId || (planNext && !nextDeadline)}
           className="w-full cursor-pointer"
           size="lg"
         >
@@ -546,5 +472,68 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+interface QuestionInputProps {
+  question: ProductQuestion;
+  answer: AnswerValue | undefined;
+  onChange: (update: AnswerValue) => void;
+}
+
+function QuestionInput({ question, answer, onChange }: QuestionInputProps) {
+  if (question.input_type === "yes_no") {
+    return (
+      <YesNoToggle
+        label={question.label + (question.required ? " *" : "")}
+        value={answer?.value_boolean ?? null}
+        onChange={(v) => onChange({ value_boolean: v })}
+      />
+    );
+  }
+  if (question.input_type === "textarea") {
+    return (
+      <div className="space-y-1.5">
+        <Label className="text-xs">
+          {question.label}
+          {question.required && " *"}
+        </Label>
+        <Textarea
+          value={answer?.value_text ?? ""}
+          onChange={(e) => onChange({ value_text: e.target.value })}
+          className="min-h-[70px] resize-none"
+        />
+      </div>
+    );
+  }
+  if (question.input_type === "number") {
+    return (
+      <div className="space-y-1.5">
+        <Label className="text-xs">
+          {question.label}
+          {question.required && " *"}
+        </Label>
+        <Input
+          type="number"
+          min="0"
+          value={answer?.value_number ?? ""}
+          onChange={(e) => onChange({ value_number: e.target.value })}
+          placeholder="0"
+        />
+      </div>
+    );
+  }
+  // short_text
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">
+        {question.label}
+        {question.required && " *"}
+      </Label>
+      <Input
+        value={answer?.value_text ?? ""}
+        onChange={(e) => onChange({ value_text: e.target.value })}
+      />
+    </div>
   );
 }

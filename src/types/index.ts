@@ -86,14 +86,53 @@ export interface Doctor {
   last_visited_at?: string | null;
 }
 
+export type QuestionInputType = "yes_no" | "short_text" | "textarea" | "number";
+export type QuestionTargetRole = "medecin" | "pharmacien";
+
+/**
+ * Rule that drives a question's visibility. `null` = always visible.
+ * Evaluated client-side against the current answers map. Unknown ops should
+ * fail open (question still renders) so old clients don't hide questions
+ * once new rule shapes land server-side.
+ */
+export type VisibleWhenRule =
+  | { op: "eq"; question_id: string; value: boolean | string | number };
+
+export interface ProductQuestion {
+  id: string;
+  product_id: string;
+  target_role: QuestionTargetRole;
+  label: string;
+  input_type: QuestionInputType;
+  required: boolean;
+  display_order: number;
+  visible_when: VisibleWhenRule | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VisitAnswer {
+  id: string;
+  visit_id: string;
+  question_id: string;
+  value_boolean: boolean | null;
+  value_text: string | null;
+  value_number: number | null;
+  created_at: string;
+  question?: ProductQuestion;
+}
+
 export interface Visit {
   id: string;
   user_id: string;
   doctor_id: string;
+  product_id: string | null;
   visit_type: VisitType;
   objective: string | null;
   compte_rendu: string | null;
-  // Médecin checklist
+  // Legacy médecin checklist — kept for pre-migration visits; new visits
+  // store answers in visit_answers instead.
   synapgen_solves: boolean | null;
   already_prescribed: boolean | null;
   promised_to_suggest: boolean | null;
@@ -105,7 +144,7 @@ export interface Visit {
   patient_feedback_comment: string | null;
   ordonnance_return: boolean | null;
   free_sample: boolean | null;
-  // Pharmacien fields
+  // Legacy pharmacien fields
   synapgen_count: number | null;
   prescriptions_received: number | null;
   prescribing_doctor: string | null;
@@ -117,6 +156,7 @@ export interface VisitWithDetails extends Visit {
   doctor: Doctor;
   user: User;
   comment_count?: number;
+  visit_answers?: VisitAnswer[];
 }
 
 export interface VisitComment {
