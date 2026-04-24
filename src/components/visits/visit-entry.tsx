@@ -32,7 +32,7 @@ import { DeadlineSelect } from "@/components/assignments/deadline-select";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { VisitWithDetails, VisitComment } from "@/types";
+import type { VisitWithDetails, VisitComment, VisitAnswer } from "@/types";
 
 /* ─── Compact yes/no icon ─── */
 function MiniYesNo({ value, label }: { value: boolean | null; label: string }) {
@@ -45,6 +45,25 @@ function MiniYesNo({ value, label }: { value: boolean | null; label: string }) {
         <X className="h-3 w-3 text-red-500" />
       )}
       <span className="text-foreground/70">{label}</span>
+    </span>
+  );
+}
+
+/* ─── Compact renderer for a single dynamic answer ─── */
+function DynamicAnswerChip({ answer }: { answer: VisitAnswer }) {
+  const label = answer.question?.label ?? "Question supprimée";
+  if (answer.value_boolean !== null && answer.value_boolean !== undefined) {
+    return <MiniYesNo value={answer.value_boolean} label={label} />;
+  }
+  const value =
+    answer.value_text ??
+    (answer.value_number !== null && answer.value_number !== undefined
+      ? String(answer.value_number)
+      : null);
+  if (!value) return null;
+  return (
+    <span className="text-[11px] text-foreground/70">
+      <span className="font-semibold">{label} :</span> {value}
     </span>
   );
 }
@@ -493,7 +512,27 @@ export function VisitEntry({
   const isHighlighted =
     !highlightUserId || visit.user_id === highlightUserId;
 
-  const evalFields = [
+  const dynamicAnswers = visit.visit_answers ?? [];
+  const hasDynamicAnswers = dynamicAnswers.length > 0;
+  const sortedAnswers = hasDynamicAnswers
+    ? [...dynamicAnswers].sort(
+        (a, b) =>
+          (a.question?.display_order ?? 0) - (b.question?.display_order ?? 0)
+      )
+    : [];
+
+  // Counts for the compact "X/Y oui" badge. Dynamic path counts yes_no
+  // answers across both médecin and pharmacien flows; legacy path keeps the
+  // médecin-only behaviour.
+  const yesNoAnswers = hasDynamicAnswers
+    ? sortedAnswers.filter(
+        (a) =>
+          a.question?.input_type === "yes_no" &&
+          a.value_boolean !== null &&
+          a.value_boolean !== undefined
+      )
+    : [];
+  const legacyEvalFields = [
     visit.synapgen_solves,
     visit.already_prescribed,
     visit.promised_to_suggest,
@@ -504,10 +543,12 @@ export function VisitEntry({
     visit.ordonnance_return,
     visit.free_sample,
   ];
-  const answeredCount = evalFields.filter(
-    (v) => v !== null && v !== undefined
-  ).length;
-  const yesCount = evalFields.filter((v) => v === true).length;
+  const answeredCount = hasDynamicAnswers
+    ? yesNoAnswers.length
+    : legacyEvalFields.filter((v) => v !== null && v !== undefined).length;
+  const yesCount = hasDynamicAnswers
+    ? yesNoAnswers.filter((a) => a.value_boolean === true).length
+    : legacyEvalFields.filter((v) => v === true).length;
 
   const handleClick = () => {
     if (onClick) {
@@ -643,7 +684,7 @@ export function VisitEntry({
                 {visit.comment_count}
               </Badge>
             )}
-            {!isPharm && answeredCount > 0 && (
+            {answeredCount > 0 && (hasDynamicAnswers || !isPharm) && (
               <Badge
                 variant="outline"
                 className="text-[10px] px-1.5 py-0 h-4 gap-0.5 font-normal"
@@ -651,7 +692,7 @@ export function VisitEntry({
                 {yesCount}/{answeredCount} oui
               </Badge>
             )}
-            {isPharm && visit.synapgen_count != null && (
+            {!hasDynamicAnswers && isPharm && visit.synapgen_count != null && (
               <Badge
                 variant="outline"
                 className="text-[10px] px-1.5 py-0 h-4 gap-0.5 font-normal"
@@ -696,8 +737,17 @@ export function VisitEntry({
             </div>
           )}
 
-          {/* Médecin evaluation summary */}
-          {!isPharm && answeredCount > 0 && (
+          {/* Dynamic answers (new visits) — one mini badge per answer. */}
+          {hasDynamicAnswers && sortedAnswers.length > 0 && (
+            <div className="flex flex-wrap gap-x-3 gap-y-1 pl-4 pt-1">
+              {sortedAnswers.map((a) => (
+                <DynamicAnswerChip key={a.id} answer={a} />
+              ))}
+            </div>
+          )}
+
+          {/* Legacy médecin evaluation summary (pre-migration visits) */}
+          {!hasDynamicAnswers && !isPharm && answeredCount > 0 && (
             <div className="flex flex-wrap gap-x-3 gap-y-1 pl-4 pt-1">
               <MiniYesNo value={visit.synapgen_solves} label="Synapgen résout" />
               <MiniYesNo
@@ -739,8 +789,8 @@ export function VisitEntry({
             </div>
           )}
 
-          {/* Pharmacien details */}
-          {isPharm && (
+          {/* Legacy pharmacien details (pre-migration visits) */}
+          {!hasDynamicAnswers && isPharm && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 pl-4 pt-1 text-[11px]">
               {visit.synapgen_count != null && (
                 <span className="text-foreground/70">

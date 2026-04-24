@@ -30,7 +30,7 @@ import {
   ImagePlus,
 } from "lucide-react";
 import { DoctorVisitTimeline } from "@/components/visits/doctor-visit-timeline";
-import type { VisitWithDetails, VisitComment } from "@/types";
+import type { VisitWithDetails, VisitComment, VisitAnswer } from "@/types";
 import { cn } from "@/lib/utils";
 
 interface VisitDetailDialogProps {
@@ -69,6 +69,34 @@ function YesNoBadge({ value, label }: { value: boolean | null; label: string }) 
           </>
         )}
       </Badge>
+    </div>
+  );
+}
+
+/**
+ * Render a single dynamic visit_answer. Boolean answers use the badge style;
+ * text/number answers render as a label + value row. Deleted questions keep
+ * rendering because soft-delete preserves the product_questions row.
+ */
+function AnswerRow({ answer }: { answer: VisitAnswer }) {
+  const label = answer.question?.label ?? "Question supprimée";
+  const inputType = answer.question?.input_type;
+
+  if (inputType === "yes_no" || answer.value_boolean !== null) {
+    return <YesNoBadge value={answer.value_boolean} label={label} />;
+  }
+  const value =
+    answer.value_text ??
+    (answer.value_number !== null && answer.value_number !== undefined
+      ? String(answer.value_number)
+      : null);
+  if (!value) return null;
+  return (
+    <div className="flex items-start justify-between gap-2 py-1">
+      <span className="text-xs text-foreground/80 flex-1">{label}</span>
+      <span className="text-xs font-medium text-foreground shrink-0 max-w-[60%] text-right whitespace-pre-wrap">
+        {value}
+      </span>
     </div>
   );
 }
@@ -370,6 +398,15 @@ export function VisitDetailDialog({
 
   const totalComments = comments.length;
 
+  const dynamicAnswers = visit.visit_answers ?? [];
+  const hasDynamicAnswers = dynamicAnswers.length > 0;
+  const sortedAnswers = hasDynamicAnswers
+    ? [...dynamicAnswers].sort(
+        (a, b) =>
+          (a.question?.display_order ?? 0) - (b.question?.display_order ?? 0)
+      )
+    : [];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -474,8 +511,34 @@ export function VisitDetailDialog({
             </div>
           )}
 
-          {/* Médecin checklist — collapsible */}
-          {!isPharm && (
+          {/* Answers — dynamic if the visit has visit_answers rows, else
+              legacy columns (for pre-migration visits). */}
+          {hasDynamicAnswers ? (
+            <div className="rounded-lg border border-border bg-muted/10 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setEvalOpen((v) => !v)}
+                className="w-full flex items-center justify-between p-3 cursor-pointer hover:bg-muted/20 transition-colors"
+              >
+                <span className="text-xs font-semibold text-foreground/80">
+                  {isPharm ? "Relevé" : "Évaluation"}
+                </span>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-muted-foreground transition-transform",
+                    evalOpen && "rotate-180"
+                  )}
+                />
+              </button>
+              {evalOpen && (
+                <div className="px-3 pb-3 space-y-1 border-t border-border/50 pt-2">
+                  {sortedAnswers.map((a) => (
+                    <AnswerRow key={a.id} answer={a} />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : !isPharm ? (
             <div className="rounded-lg border border-border bg-muted/10 overflow-hidden">
               <button
                 type="button"
@@ -537,10 +600,7 @@ export function VisitDetailDialog({
                 </div>
               )}
             </div>
-          )}
-
-          {/* Pharmacien data */}
-          {isPharm && (
+          ) : (
             <div className="rounded-lg border border-border p-3 bg-muted/10">
               <div className="grid grid-cols-2 gap-3 text-sm">
                 {visit.synapgen_count != null && (

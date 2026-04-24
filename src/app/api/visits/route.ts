@@ -43,6 +43,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
+interface AnswerPayload {
+  question_id: string;
+  value_boolean?: boolean | null;
+  value_text?: string | null;
+  value_number?: number | null;
+}
+
 export async function POST(request: NextRequest) {
   const { userId } = await auth();
   if (!userId) {
@@ -52,33 +59,28 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const {
     doctor_id,
+    product_id,
     visit_type,
     objective,
     compte_rendu,
-    // médecin checklist
-    synapgen_solves,
-    already_prescribed,
-    promised_to_suggest,
-    price_objection,
-    prescribes_magnesium,
-    magnesium_brand,
-    fears_side_effects,
-    patient_feedback,
-    patient_feedback_comment,
-    ordonnance_return,
-    free_sample,
-    // pharmacien
-    synapgen_count,
-    prescriptions_received,
-    prescribing_doctor,
-    accepted_order,
-  } = body;
+    answers,
+  } = body as {
+    doctor_id?: string;
+    product_id?: string;
+    visit_type?: string;
+    objective?: string;
+    compte_rendu?: string;
+    answers?: AnswerPayload[];
+  };
 
   if (!doctor_id) {
     return NextResponse.json({ error: "Le médecin/pharmacien est requis" }, { status: 400 });
   }
   if (visit_type !== "medecin" && visit_type !== "pharmacien") {
     return NextResponse.json({ error: "Type de visite invalide" }, { status: 400 });
+  }
+  if (!product_id) {
+    return NextResponse.json({ error: "Le produit est requis" }, { status: 400 });
   }
   if (visit_type === "medecin" && (!objective || !compte_rendu)) {
     return NextResponse.json(
@@ -96,62 +98,83 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Utilisateur non trouvé" }, { status: 404 });
   }
 
-  const { data, error } = await supabase
+  const { data: visit, error: visitError } = await supabase
     .from("visits")
     .insert({
       user_id: currentUser.id,
       doctor_id,
+      product_id,
       visit_type,
       objective: objective || null,
       compte_rendu: compte_rendu || null,
-      synapgen_solves: visit_type === "medecin" ? synapgen_solves ?? null : null,
-      already_prescribed: visit_type === "medecin" ? already_prescribed ?? null : null,
-      promised_to_suggest: visit_type === "medecin" ? promised_to_suggest ?? null : null,
-      price_objection: visit_type === "medecin" ? price_objection ?? null : null,
-      prescribes_magnesium: visit_type === "medecin" ? prescribes_magnesium ?? null : null,
-      magnesium_brand: visit_type === "medecin" ? magnesium_brand || null : null,
-      fears_side_effects: visit_type === "medecin" ? fears_side_effects ?? null : null,
-      patient_feedback: visit_type === "medecin" ? patient_feedback ?? null : null,
-      patient_feedback_comment:
-        visit_type === "medecin" ? patient_feedback_comment || null : null,
-      ordonnance_return: visit_type === "medecin" ? ordonnance_return ?? null : null,
-      free_sample: visit_type === "medecin" ? free_sample ?? null : null,
-      synapgen_count: visit_type === "pharmacien" ? synapgen_count ?? null : null,
-      prescriptions_received:
-        visit_type === "pharmacien" ? prescriptions_received ?? null : null,
-      prescribing_doctor: visit_type === "pharmacien" ? prescribing_doctor || null : null,
-      accepted_order: visit_type === "pharmacien" ? accepted_order ?? null : null,
+      // Legacy answer columns stay NULL for new visits — answers live in
+      // visit_answers.
     })
     .select("*, doctor:doctors(*), user:users(*)")
     .single();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (visitError || !visit) {
+    return NextResponse.json(
+      { error: visitError?.message ?? "Erreur lors de la création de la visite" },
+      { status: 500 }
+    );
   }
 
-  // Auto-complete pending assignments for this doctor
-  if (data) {
-    const { data: pendingAssignments } = await supabase
-      .from("visit_assignments")
-      .select("id")
-      .eq("assignee_id", currentUser.id)
-      .eq("doctor_id", doctor_id)
-      .eq("status", "pending")
-      .order("deadline", { ascending: true })
-      .limit(1);
+  // Persist answers. If this fails, remove the visit we just inserted so
+  // the caller isn't left with an empty half-written row.
+  if (Array.isArray(answers) && answers.length > 0) {
+    const rows = answers
+      .filter(
+        (a) =>
+          a &&
+          typeof a.question_id === "string" &&
+          (a.value_boolean !== undefined ||
+            a.value_text !== undefined ||
+            a.value_number !== undefined)
+      )
+      .map((a) => ({
+        visit_id: visit.id,
+        question_id: a.question_id,
+        value_boolean: a.value_boolean ?? null,
+        value_text: a.value_text ?? null,
+        value_number: a.value_number ?? null,
+      }));
 
-    if (pendingAssignments && pendingAssignments.length > 0) {
-      await supabase
-        .from("visit_assignments")
-        .update({
-          status: "completed",
-          completed_at: new Date().toISOString(),
-          visit_id: data.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", pendingAssignments[0].id);
+    if (rows.length > 0) {
+      const { error: answersError } = await supabase
+        .from("visit_answers")
+        .insert(rows);
+      if (answersError) {
+        await supabase.from("visits").delete().eq("id", visit.id);
+        return NextResponse.json(
+          { error: answersError.message },
+          { status: 500 }
+        );
+      }
     }
   }
 
-  return NextResponse.json(data, { status: 201 });
+  // Auto-complete pending assignments for this doctor
+  const { data: pendingAssignments } = await supabase
+    .from("visit_assignments")
+    .select("id")
+    .eq("assignee_id", currentUser.id)
+    .eq("doctor_id", doctor_id)
+    .eq("status", "pending")
+    .order("deadline", { ascending: true })
+    .limit(1);
+
+  if (pendingAssignments && pendingAssignments.length > 0) {
+    await supabase
+      .from("visit_assignments")
+      .update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+        visit_id: visit.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", pendingAssignments[0].id);
+  }
+
+  return NextResponse.json(visit, { status: 201 });
 }
