@@ -205,10 +205,6 @@ export default function DoctorDetailPage() {
           visits={visits}
           doctorType={doctor.doctor_type as import("@/types").DoctorType}
           showUser
-          userRole={userRole}
-          onVisitDelete={(id) =>
-            setVisits((prev) => prev.filter((v) => v.id !== id))
-          }
         />
       ) : (
         <Card>

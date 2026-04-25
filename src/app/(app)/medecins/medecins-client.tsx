@@ -400,10 +400,6 @@ export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
                                 key={visit.id}
                                 visit={visit}
                                 showUser
-                                userRole={role}
-                                onDelete={(id) =>
-                                  setExpandedVisits((prev) => prev.filter((v) => v.id !== id))
-                                }
                               />
                             ))}
                           </div>
