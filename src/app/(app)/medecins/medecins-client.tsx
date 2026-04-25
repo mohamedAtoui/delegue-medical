@@ -396,7 +396,15 @@ export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
                         ) : (
                           <div className="space-y-2">
                             {expandedVisits.map((visit) => (
-                              <VisitEntry key={visit.id} visit={visit} showUser />
+                              <VisitEntry
+                                key={visit.id}
+                                visit={visit}
+                                showUser
+                                userRole={role}
+                                onDelete={(id) =>
+                                  setExpandedVisits((prev) => prev.filter((v) => v.id !== id))
+                                }
+                              />
                             ))}
                           </div>
                         )}

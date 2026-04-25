@@ -33,6 +33,8 @@ interface DoctorVisitGroupProps {
   showUser?: boolean;
   highlightUserId?: string;
   onVisitClick?: (visit: VisitWithDetails) => void;
+  userRole?: string;
+  onVisitDelete?: (visitId: string) => void;
 }
 
 export function DoctorVisitGroup({
@@ -46,6 +48,8 @@ export function DoctorVisitGroup({
   showUser = false,
   highlightUserId,
   onVisitClick,
+  userRole,
+  onVisitDelete,
 }: DoctorVisitGroupProps) {
   const [expanded, setExpanded] = useState(false);
   const lastVisit = visits[0];
@@ -145,6 +149,8 @@ export function DoctorVisitGroup({
                 showUser={showUser}
                 highlightUserId={highlightUserId}
                 onClick={onVisitClick}
+                userRole={userRole}
+                onDelete={onVisitDelete}
               />
             ))}
           </div>

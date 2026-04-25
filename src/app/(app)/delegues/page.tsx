@@ -254,6 +254,10 @@ export default function DeleguesPage() {
     };
   }, [filteredVisits, selectedRep]);
 
+  const handleVisitDelete = useCallback((visitId: string) => {
+    setVisits((prev) => prev.filter((v) => v.id !== visitId));
+  }, []);
+
   const saveWilayas = async () => {
     if (!selectedRep) return;
     setSavingWilayas(true);
@@ -797,6 +801,8 @@ export default function DeleguesPage() {
                       doctorType={group.doctorType}
                       showUser
                       highlightUserId={selectedRep?.id}
+                      userRole="superviseur"
+                      onVisitDelete={handleVisitDelete}
                     />
                   ))}
                 </div>
@@ -827,6 +833,8 @@ export default function DeleguesPage() {
                             visit={v}
                             showUser
                             highlightUserId={selectedRep?.id}
+                            userRole="superviseur"
+                            onDelete={handleVisitDelete}
                           />
                         ))}
                       </div>

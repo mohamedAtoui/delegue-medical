@@ -118,6 +118,10 @@ export function ActivityFeed({ initialVisits }: ActivityFeedProps = {}) {
                 visits={group.visits}
                 doctorType={group.doctorType}
                 showUser
+                userRole="superviseur"
+                onVisitDelete={(id) =>
+                  setVisits((prev) => prev.filter((v) => v.id !== id))
+                }
               />
             ))}
           </div>

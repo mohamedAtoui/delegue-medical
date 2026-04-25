@@ -305,6 +305,7 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
       <VisitHistory
         refreshKey={refreshKey}
         showUser={isSupervisor}
+        userRole={role}
         typeFilter={typeFilter || "all"}
         from={fromIso}
         to={toIso}

@@ -18,6 +18,7 @@ interface VisitHistoryProps {
   search?: string;
   initialVisits?: VisitWithDetails[];
   initialTotal?: number;
+  userRole?: string;
 }
 
 interface DoctorGroup {
@@ -67,6 +68,7 @@ export function VisitHistory({
   search,
   initialVisits,
   initialTotal,
+  userRole,
 }: VisitHistoryProps) {
   const hasInitial = initialVisits !== undefined;
   const [groups, setGroups] = useState<DoctorGroup[]>(() =>
@@ -111,6 +113,15 @@ export function VisitHistory({
     fetchVisits();
   }, [fetchVisits, refreshKey]);
 
+  const handleVisitDelete = useCallback((visitId: string) => {
+    setGroups((prev) =>
+      prev
+        .map((g) => ({ ...g, visits: g.visits.filter((v) => v.id !== visitId) }))
+        .filter((g) => g.visits.length > 0)
+    );
+    setTotal((t) => Math.max(0, t - 1));
+  }, []);
+
   if (loading && groups.length === 0) {
     return <MedicalLoader variant="inline" />;
   }
@@ -138,6 +149,8 @@ export function VisitHistory({
           visits={group.visits}
           doctorType={group.doctorType}
           showUser={showUser}
+          userRole={userRole}
+          onVisitDelete={handleVisitDelete}
         />
       ))}
 

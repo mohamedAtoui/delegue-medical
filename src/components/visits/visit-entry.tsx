@@ -19,15 +19,29 @@ import {
   Send,
   ImagePlus,
   CalendarPlus,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { DeadlineSelect } from "@/components/assignments/deadline-select";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { toast } from "sonner";
@@ -498,6 +512,10 @@ export interface VisitEntryProps {
   highlightUserId?: string;
   /** Called when the user clicks the entry (overrides inline expand) */
   onClick?: (visit: VisitWithDetails) => void;
+  /** Current user role — when "superviseur", show danger zone */
+  userRole?: string;
+  /** Called after the visit is successfully deleted */
+  onDelete?: (visitId: string) => void;
 }
 
 export function VisitEntry({
@@ -506,8 +524,13 @@ export function VisitEntry({
   showDoctor = false,
   highlightUserId,
   onClick,
+  userRole,
+  onDelete,
 }: VisitEntryProps) {
   const [open, setOpen] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const isPharm = visit.visit_type === "pharmacien";
   const isHighlighted =
     !highlightUserId || visit.user_id === highlightUserId;
@@ -831,6 +854,125 @@ export function VisitEntry({
             }
             doctorIsPharmacien={isPharm}
           />
+
+          {/* Danger zone — supervisor only */}
+          {userRole === "superviseur" && visit.doctor && (
+            <>
+              <Separator className="my-3" />
+              <div
+                className="rounded-lg border border-red-200 bg-red-50/50 p-3 space-y-2"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-3.5 w-3.5 text-red-600" />
+                  <h3 className="text-xs font-semibold text-red-800">
+                    Zone dangereuse
+                  </h3>
+                </div>
+                <p className="text-[11px] text-red-700/80">
+                  Supprimer cette visite ainsi que tous les commentaires associés.
+                  Toute planification liée sera remise en attente. Cette action est
+                  irréversible.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDeleteConfirmText("");
+                    setShowDeleteDialog(true);
+                  }}
+                  className="cursor-pointer border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800 h-7 text-xs"
+                >
+                  <Trash2 className="mr-1.5 h-3 w-3" />
+                  Supprimer cette visite
+                </Button>
+              </div>
+
+              <AlertDialog
+                open={showDeleteDialog}
+                onOpenChange={setShowDeleteDialog}
+              >
+                <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="text-red-700">
+                      Supprimer la visite du{" "}
+                      {format(new Date(visit.created_at), "d MMM yyyy", {
+                        locale: fr,
+                      })}{" "}
+                      chez {isPharm ? "" : "Dr. "}
+                      {visit.doctor.last_name} {visit.doctor.first_name} ?
+                    </AlertDialogTitle>
+                    <AlertDialogDescription className="space-y-3">
+                      <span className="block">
+                        Cette action est irréversible. Tous les commentaires
+                        seront supprimés et toute planification liée à cette
+                        visite sera remise en attente.
+                      </span>
+                      <span className="block text-sm font-medium text-foreground">
+                        Tapez{" "}
+                        <span className="font-mono text-red-600">
+                          supprimer la visite de {isPharm ? "" : "Dr. "}
+                          {visit.doctor.last_name} {visit.doctor.first_name}
+                        </span>
+                        {" "}pour confirmer :
+                      </span>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <Input
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    placeholder={`supprimer la visite de ${
+                      isPharm ? "" : "Dr. "
+                    }${visit.doctor.last_name} ${visit.doctor.first_name}`}
+                    className="font-mono text-sm"
+                  />
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="cursor-pointer">
+                      Annuler
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      disabled={
+                        deleting ||
+                        !visit.doctor ||
+                        deleteConfirmText.trim().toLowerCase() !==
+                          `supprimer la visite de ${
+                            isPharm ? "" : "dr. "
+                          }${visit.doctor.last_name} ${visit.doctor.first_name}`.toLowerCase()
+                      }
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        setDeleting(true);
+                        try {
+                          const res = await fetch(`/api/visits/${visit.id}`, {
+                            method: "DELETE",
+                          });
+                          if (!res.ok) {
+                            const err = await res.json();
+                            throw new Error(err.error);
+                          }
+                          toast.success("Visite supprimée");
+                          setShowDeleteDialog(false);
+                          onDelete?.(visit.id);
+                        } catch (err) {
+                          toast.error(
+                            err instanceof Error
+                              ? err.message
+                              : "Erreur lors de la suppression"
+                          );
+                        } finally {
+                          setDeleting(false);
+                        }
+                      }}
+                      className="bg-red-600 hover:bg-red-700 cursor-pointer"
+                    >
+                      {deleting ? "Suppression..." : "Supprimer définitivement"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
+          )}
         </div>
       )}
     </div>
