@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
           type: "assignment_new",
           title: `${supName} vous a assigné une visite : ${docName}`,
           message: `Échéance : ${dateText}`,
-          link: "/planification",
+          link: `/planification?assignment=${data.id}`,
           entity_id: data.id,
           entity_type: "assignment",
         },

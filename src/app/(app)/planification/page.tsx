@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getOrCreateUser } from "@/lib/clerk/sync-user";
 import { redirect } from "next/navigation";
 import { PlanificationClient } from "./planification-client";
@@ -17,9 +18,11 @@ export default async function PlanificationPage() {
   });
 
   return (
-    <PlanificationClient
-      userId={user.id}
-      initialAssignments={initial.data}
-    />
+    <Suspense fallback={null}>
+      <PlanificationClient
+        userId={user.id}
+        initialAssignments={initial.data}
+      />
+    </Suspense>
   );
 }

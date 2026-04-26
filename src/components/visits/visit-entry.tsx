@@ -516,6 +516,8 @@ export interface VisitEntryProps {
   userRole?: string;
   /** Called after the visit is successfully deleted */
   onDelete?: (visitId: string) => void;
+  /** When this id matches visit.id, auto-open + scroll into view + ring */
+  highlightVisitId?: string;
 }
 
 export function VisitEntry({
@@ -526,11 +528,23 @@ export function VisitEntry({
   onClick,
   userRole,
   onDelete,
+  highlightVisitId,
 }: VisitEntryProps) {
-  const [open, setOpen] = useState(false);
+  const isHighlightTarget = highlightVisitId === visit.id;
+  const [open, setOpen] = useState<boolean>(isHighlightTarget);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Scroll the highlighted visit into view on mount (open state already set above)
+  useEffect(() => {
+    if (!isHighlightTarget) return;
+    const t = setTimeout(() => {
+      wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 50);
+    return () => clearTimeout(t);
+  }, [isHighlightTarget]);
   const isPharm = visit.visit_type === "pharmacien";
   const isHighlighted =
     !highlightUserId || visit.user_id === highlightUserId;
@@ -583,11 +597,13 @@ export function VisitEntry({
 
   return (
     <div
+      ref={wrapperRef}
       className={cn(
         "rounded-xl border overflow-hidden transition-shadow hover:shadow-sm",
         isHighlighted
           ? "border-border/60 bg-background/80"
-          : "border-border/30 bg-muted/10"
+          : "border-border/30 bg-muted/10",
+        isHighlightTarget && "ring-2 ring-primary/60 ring-offset-2 shadow-md"
       )}
     >
       {/* Header — always visible */}

@@ -35,6 +35,8 @@ interface DoctorVisitGroupProps {
   onVisitClick?: (visit: VisitWithDetails) => void;
   userRole?: string;
   onVisitDelete?: (visitId: string) => void;
+  /** Auto-expand if this id matches one of our visits */
+  highlightVisitId?: string;
 }
 
 export function DoctorVisitGroup({
@@ -48,10 +50,15 @@ export function DoctorVisitGroup({
   showUser = false,
   highlightUserId,
   onVisitClick,
+  highlightVisitId,
   userRole,
   onVisitDelete,
 }: DoctorVisitGroupProps) {
-  const [expanded, setExpanded] = useState(false);
+  // Auto-expand on initial mount if a highlighted visit belongs to this group
+  const [expanded, setExpanded] = useState<boolean>(() =>
+    !!(highlightVisitId && visits.some((v) => v.id === highlightVisitId))
+  );
+
   const lastVisit = visits[0];
   const totalComments = visits.reduce(
     (sum, v) => sum + (v.comment_count || 0),
@@ -151,6 +158,7 @@ export function DoctorVisitGroup({
                 onClick={onVisitClick}
                 userRole={userRole}
                 onDelete={onVisitDelete}
+                highlightVisitId={highlightVisitId}
               />
             ))}
           </div>

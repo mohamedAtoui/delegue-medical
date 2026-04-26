@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { AssignmentList } from "@/components/assignments/assignment-list";
 import { CalendarCheck } from "lucide-react";
 import type { VisitAssignmentWithDetails } from "@/types";
@@ -13,6 +14,9 @@ export function PlanificationClient({
   userId,
   initialAssignments,
 }: PlanificationClientProps) {
+  const searchParams = useSearchParams();
+  const highlightAssignmentId = searchParams.get("assignment") || undefined;
+
   return (
     <div className="space-y-6">
       <div>
@@ -28,6 +32,7 @@ export function PlanificationClient({
       <AssignmentList
         assigneeId={userId}
         initialAssignments={initialAssignments}
+        highlightAssignmentId={highlightAssignmentId}
       />
     </div>
   );

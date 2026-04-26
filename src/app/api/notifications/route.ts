@@ -37,7 +37,7 @@ export async function GET() {
       type: "assignment_due_soon",
       title: `Visite à faire bientôt : ${name}`,
       message: "Échéance dans moins de 24 heures",
-      link: "/planification",
+      link: `/planification?assignment=${a.id}`,
       entity_id: a.id,
       entity_type: "assignment",
     });
@@ -63,7 +63,7 @@ export async function GET() {
       type: "assignment_overdue",
       title: `Visite en retard : ${name}`,
       message: "L'échéance est passée",
-      link: "/planification",
+      link: `/planification?assignment=${a.id}`,
       entity_id: a.id,
       entity_type: "assignment",
     });

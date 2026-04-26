@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Plus,
   ArrowLeft,
@@ -41,6 +42,8 @@ interface VisitesClientProps {
 
 export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClientProps) {
   const isSupervisor = role === "superviseur";
+  const searchParams = useSearchParams();
+  const highlightVisitId = searchParams.get("visit") || undefined;
   const [refreshKey, setRefreshKey] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
@@ -314,6 +317,7 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
         search={search || undefined}
         initialVisits={initialVisits}
         initialTotal={initialTotal}
+        highlightVisitId={highlightVisitId}
       />
     </div>
   );

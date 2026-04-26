@@ -19,6 +19,7 @@ interface VisitHistoryProps {
   initialVisits?: VisitWithDetails[];
   initialTotal?: number;
   userRole?: string;
+  highlightVisitId?: string;
 }
 
 interface DoctorGroup {
@@ -69,6 +70,7 @@ export function VisitHistory({
   initialVisits,
   initialTotal,
   userRole,
+  highlightVisitId,
 }: VisitHistoryProps) {
   const hasInitial = initialVisits !== undefined;
   const [groups, setGroups] = useState<DoctorGroup[]>(() =>
@@ -151,6 +153,7 @@ export function VisitHistory({
           showUser={showUser}
           userRole={userRole}
           onVisitDelete={handleVisitDelete}
+          highlightVisitId={highlightVisitId}
         />
       ))}
 

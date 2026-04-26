@@ -34,12 +34,15 @@ interface AssignmentListProps {
   /** Show assignee name on each card (for supervisor view) */
   showAssignee?: boolean;
   initialAssignments?: VisitAssignmentWithDetails[];
+  /** When set, scroll the matching card into view + apply ring */
+  highlightAssignmentId?: string;
 }
 
 export function AssignmentList({
   assigneeId,
   showAssignee = false,
   initialAssignments,
+  highlightAssignmentId,
 }: AssignmentListProps) {
   const hasInitial = initialAssignments !== undefined;
   const [assignments, setAssignments] = useState<VisitAssignmentWithDetails[]>(
@@ -75,6 +78,17 @@ export function AssignmentList({
     }
     fetchAssignments();
   }, [fetchAssignments]);
+
+  // Scroll the highlighted assignment into view once it's in the rendered list
+  useEffect(() => {
+    if (!highlightAssignmentId) return;
+    if (!assignments.some((a) => a.id === highlightAssignmentId)) return;
+    const t = setTimeout(() => {
+      const el = document.getElementById(`assignment-${highlightAssignmentId}`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    return () => clearTimeout(t);
+  }, [highlightAssignmentId, assignments]);
 
   const handleDeleteRequest = (id: string) => {
     setDeleteId(id);
@@ -207,6 +221,7 @@ export function AssignmentList({
               showAssignee={showAssignee}
               onEdit={a.status !== "completed" ? handleEdit : undefined}
               onDelete={a.status !== "completed" ? handleDeleteRequest : undefined}
+              highlight={a.id === highlightAssignmentId}
             />
           ))}
         </div>

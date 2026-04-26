@@ -24,6 +24,7 @@ interface AssignmentCardProps {
   onEdit?: (assignment: VisitAssignmentWithDetails) => void;
   onDelete?: (id: string) => void;
   showAssignee?: boolean;
+  highlight?: boolean;
 }
 
 export function AssignmentCard({
@@ -31,6 +32,7 @@ export function AssignmentCard({
   onEdit,
   onDelete,
   showAssignee = false,
+  highlight = false,
 }: AssignmentCardProps) {
   const isPharm = assignment.doctor?.doctor_type === "pharmacien";
   const Icon = isPharm ? Pill : Stethoscope;
@@ -50,13 +52,15 @@ export function AssignmentCard({
 
   return (
     <div
+      id={`assignment-${assignment.id}`}
       className={cn(
         "rounded-xl border overflow-hidden transition-all",
         isCompleted
           ? "border-green-200/60 bg-green-50/30"
           : isOverdue
           ? "border-red-200/60 bg-red-50/20"
-          : "border-border/60 bg-background hover:shadow-sm"
+          : "border-border/60 bg-background hover:shadow-sm",
+        highlight && "ring-2 ring-primary/60 ring-offset-2 shadow-md"
       )}
     >
       <div className="p-3.5">

@@ -183,7 +183,7 @@ export async function POST(
             ? `${authorName} a répondu à un commentaire`
             : `${authorName} a commenté votre visite`,
           message: preview,
-          link: "/visites",
+          link: `/visites?visit=${id}`,
           entity_id: id,
           entity_type: "visit",
         }))

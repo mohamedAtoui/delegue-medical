@@ -16,6 +16,7 @@ export const SPECIALTIES = [
   "Rhumatologue",
   "Urologue",
   "Chirurgien",
+  "Neurochirurgien",
   "Interniste",
   "Oncologue",
   "Néphrologue",

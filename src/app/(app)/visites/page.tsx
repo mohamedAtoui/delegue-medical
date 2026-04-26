@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getOrCreateUser } from "@/lib/clerk/sync-user";
 import { redirect } from "next/navigation";
 import { VisitesClient } from "./visites-client";
@@ -19,10 +20,12 @@ export default async function VisitesPage() {
   });
 
   return (
-    <VisitesClient
-      role={user.role}
-      initialVisits={initial.data}
-      initialTotal={initial.count}
-    />
+    <Suspense fallback={null}>
+      <VisitesClient
+        role={user.role}
+        initialVisits={initial.data}
+        initialTotal={initial.count}
+      />
+    </Suspense>
   );
 }
