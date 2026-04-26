@@ -20,13 +20,10 @@ import {
   ImagePlus,
   CalendarPlus,
   Trash2,
-  AlertTriangle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
 import {
   Popover,
   PopoverContent,
@@ -533,7 +530,6 @@ export function VisitEntry({
   const isHighlightTarget = highlightVisitId === visit.id;
   const [open, setOpen] = useState<boolean>(isHighlightTarget);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -916,38 +912,22 @@ export function VisitEntry({
             doctorIsPharmacien={isPharm}
           />
 
-          {/* Danger zone — supervisor only */}
+          {/* Bin button — supervisor only */}
           {userRole === "superviseur" && visit.doctor && (
             <>
-              <Separator className="my-3" />
               <div
-                className="rounded-lg border border-red-200 bg-red-50/50 p-3 space-y-2"
+                className="flex justify-end pt-2"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-3.5 w-3.5 text-red-600" />
-                  <h3 className="text-xs font-semibold text-red-800">
-                    Zone dangereuse
-                  </h3>
-                </div>
-                <p className="text-[11px] text-red-700/80">
-                  Supprimer cette visite ainsi que tous les commentaires associés.
-                  Toute planification liée sera remise en attente. Cette action est
-                  irréversible.
-                </p>
-                <Button
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setDeleteConfirmText("");
-                    setShowDeleteDialog(true);
-                  }}
-                  className="cursor-pointer border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800 h-7 text-xs"
+                  onClick={() => setShowDeleteDialog(true)}
+                  className="p-1.5 rounded-md hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"
+                  title="Supprimer cette visite"
+                  aria-label="Supprimer cette visite"
                 >
-                  <Trash2 className="mr-1.5 h-3 w-3" />
-                  Supprimer cette visite
-                </Button>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
 
               <AlertDialog
@@ -956,51 +936,27 @@ export function VisitEntry({
               >
                 <AlertDialogContent onClick={(e) => e.stopPropagation()}>
                   <AlertDialogHeader>
-                    <AlertDialogTitle className="text-red-700">
-                      Supprimer la visite du{" "}
+                    <AlertDialogTitle>
+                      Supprimer cette visite ?
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Visite du{" "}
                       {format(new Date(visit.created_at), "d MMM yyyy", {
                         locale: fr,
                       })}{" "}
                       chez {isPharm ? "" : "Dr. "}
-                      {visit.doctor.last_name} {visit.doctor.first_name} ?
-                    </AlertDialogTitle>
-                    <AlertDialogDescription className="space-y-3">
-                      <span className="block">
-                        Cette action est irréversible. Tous les commentaires
-                        seront supprimés et toute planification liée à cette
-                        visite sera remise en attente.
-                      </span>
-                      <span className="block text-sm font-medium text-foreground">
-                        Tapez{" "}
-                        <span className="font-mono text-red-600">
-                          supprimer la visite de {isPharm ? "" : "Dr. "}
-                          {visit.doctor.last_name} {visit.doctor.first_name}
-                        </span>
-                        {" "}pour confirmer :
-                      </span>
+                      {visit.doctor.last_name} {visit.doctor.first_name}.
+                      Cette action est irréversible. Les commentaires seront
+                      supprimés et toute planification liée sera remise en
+                      attente.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
-                  <Input
-                    value={deleteConfirmText}
-                    onChange={(e) => setDeleteConfirmText(e.target.value)}
-                    placeholder={`supprimer la visite de ${
-                      isPharm ? "" : "Dr. "
-                    }${visit.doctor.last_name} ${visit.doctor.first_name}`}
-                    className="font-mono text-sm"
-                  />
                   <AlertDialogFooter>
                     <AlertDialogCancel className="cursor-pointer">
                       Annuler
                     </AlertDialogCancel>
                     <AlertDialogAction
-                      disabled={
-                        deleting ||
-                        !visit.doctor ||
-                        deleteConfirmText.trim().toLowerCase() !==
-                          `supprimer la visite de ${
-                            isPharm ? "" : "dr. "
-                          }${visit.doctor.last_name} ${visit.doctor.first_name}`.toLowerCase()
-                      }
+                      disabled={deleting}
                       onClick={async (e) => {
                         e.preventDefault();
                         setDeleting(true);
@@ -1027,7 +983,7 @@ export function VisitEntry({
                       }}
                       className="bg-red-600 hover:bg-red-700 cursor-pointer"
                     >
-                      {deleting ? "Suppression..." : "Supprimer définitivement"}
+                      {deleting ? "Suppression..." : "Supprimer"}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
