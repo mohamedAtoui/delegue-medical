@@ -776,14 +776,59 @@ export function VisitEntry({
             </div>
           )}
 
-          {/* Dynamic answers (new visits) — one mini badge per answer. */}
-          {hasDynamicAnswers && sortedAnswers.length > 0 && (
-            <div className="flex flex-wrap gap-x-3 gap-y-1 pl-4 pt-1">
-              {sortedAnswers.map((a) => (
-                <DynamicAnswerChip key={a.id} answer={a} />
-              ))}
-            </div>
-          )}
+          {/* Dynamic answers (new visits). For pharmacien visits whose answers
+              span multiple products, group by product so each product's
+              numbers stay readable. */}
+          {hasDynamicAnswers && sortedAnswers.length > 0 && (() => {
+            const productIds = new Set(
+              sortedAnswers
+                .map((a) => a.question?.product_id)
+                .filter((p): p is string => !!p)
+            );
+            const showGrouped = isPharm && productIds.size > 1;
+            if (!showGrouped) {
+              return (
+                <div className="flex flex-wrap gap-x-3 gap-y-1 pl-4 pt-1">
+                  {sortedAnswers.map((a) => (
+                    <DynamicAnswerChip key={a.id} answer={a} />
+                  ))}
+                </div>
+              );
+            }
+            // Group answers by product_id (preserving sort order)
+            const groups = new Map<
+              string,
+              { name: string; answers: typeof sortedAnswers }
+            >();
+            for (const a of sortedAnswers) {
+              const pid = a.question?.product_id || "unknown";
+              if (!groups.has(pid)) {
+                groups.set(pid, {
+                  name:
+                    (a.question as { product?: { name?: string } } | undefined)
+                      ?.product?.name || "Produit",
+                  answers: [],
+                });
+              }
+              groups.get(pid)!.answers.push(a);
+            }
+            return (
+              <div className="space-y-2 pl-4 pt-1">
+                {Array.from(groups.entries()).map(([pid, group]) => (
+                  <div key={pid}>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-primary/70 mb-0.5">
+                      {group.name}
+                    </p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1">
+                      {group.answers.map((a) => (
+                        <DynamicAnswerChip key={a.id} answer={a} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Legacy médecin evaluation summary (pre-migration visits) */}
           {!hasDynamicAnswers && !isPharm && answeredCount > 0 && (

@@ -79,7 +79,10 @@ export async function POST(request: NextRequest) {
   if (visit_type !== "medecin" && visit_type !== "pharmacien") {
     return NextResponse.json({ error: "Type de visite invalide" }, { status: 400 });
   }
-  if (!product_id) {
+  // Product is required only for médecin visits. Pharmacien visits cover
+  // the whole product portfolio at once and store answers per question
+  // (each question knows its own product_id).
+  if (visit_type === "medecin" && !product_id) {
     return NextResponse.json({ error: "Le produit est requis" }, { status: 400 });
   }
   if (visit_type === "medecin" && (!objective || !compte_rendu)) {
@@ -103,7 +106,7 @@ export async function POST(request: NextRequest) {
     .insert({
       user_id: currentUser.id,
       doctor_id,
-      product_id,
+      product_id: product_id ?? null,
       visit_type,
       objective: objective || null,
       compte_rendu: compte_rendu || null,

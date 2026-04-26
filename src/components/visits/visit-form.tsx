@@ -29,6 +29,11 @@ import type {
   VisibleWhenRule,
 } from "@/types";
 
+/** Pharmacien path joins the parent product so we can group by product name. */
+type ProductQuestionWithProduct = ProductQuestion & {
+  product?: { id: string; name: string; active: boolean } | null;
+};
+
 interface VisitFormProps {
   onSuccess: () => void;
 }
@@ -77,7 +82,7 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
   const [objective, setObjective] = useState("");
   const [compteRendu, setCompteRendu] = useState("");
   const [answers, setAnswers] = useState<AnswersMap>({});
-  const [questions, setQuestions] = useState<ProductQuestion[]>([]);
+  const [questions, setQuestions] = useState<ProductQuestionWithProduct[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showDoctorForm, setShowDoctorForm] = useState(false);
@@ -92,19 +97,26 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
     setVisitType(t);
     setDoctor(null);
     setAnswers({});
+    setProductId("");
   };
 
-  // Reload questions whenever product or visit type changes.
+  // Reload questions when type or product changes.
+  // Médecin: questions for the selected product only.
+  // Pharmacien: questions across ALL active products (whole portfolio).
   const loadQuestions = useCallback(async () => {
-    if (!productId) {
-      setQuestions([]);
-      return;
-    }
     setLoadingQuestions(true);
     try {
-      const res = await fetch(
-        `/api/products/${productId}/questions?target_role=${visitType}`
-      );
+      let url: string;
+      if (visitType === "pharmacien") {
+        url = `/api/products/questions?target_role=pharmacien`;
+      } else {
+        if (!productId) {
+          setQuestions([]);
+          return;
+        }
+        url = `/api/products/${productId}/questions?target_role=medecin`;
+      }
+      const res = await fetch(url);
       const data = await res.json();
       setQuestions(Array.isArray(data) ? data : []);
     } catch {
@@ -128,7 +140,7 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!productId) {
+    if (visitType === "medecin" && !productId) {
       toast.error("Veuillez sélectionner un produit");
       return;
     }
@@ -195,7 +207,7 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
 
       const payload = {
         doctor_id: doctor.id,
-        product_id: productId,
+        product_id: visitType === "medecin" ? productId : null,
         visit_type: visitType,
         objective: visitType === "medecin" ? objective.trim() : null,
         compte_rendu: compteRendu.trim(),
@@ -263,13 +275,7 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
   return (
     <>
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Product picker */}
-        <div className="space-y-2">
-          <Label>Produit *</Label>
-          <ProductSelect value={productId} onValueChange={setProductId} />
-        </div>
-
-        {/* Type selector */}
+        {/* Type selector — drives whether a product picker is needed */}
         <div className="space-y-2">
           <Label>Type de visite *</Label>
           <div className="grid grid-cols-2 gap-2">
@@ -301,6 +307,14 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
             </button>
           </div>
         </div>
+
+        {/* Product picker — médecin only (pharmacien visits cover all products) */}
+        {visitType === "medecin" && (
+          <div className="space-y-2">
+            <Label>Produit *</Label>
+            <ProductSelect value={productId} onValueChange={setProductId} />
+          </div>
+        )}
 
         {/* Doctor search */}
         <div className="space-y-2">
@@ -354,19 +368,49 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
         </div>
 
         {/* Dynamic per-product questions */}
-        {productId && (
+        {(visitType === "pharmacien" || productId) && (
           <Card className="bg-muted/20">
             <CardContent className="p-4 space-y-3">
               <p className="text-sm font-semibold text-foreground/90">
-                {visitType === "medecin" ? "Évaluation" : "Relevé"}
+                {visitType === "medecin" ? "Évaluation" : "Relevé par produit"}
               </p>
               {loadingQuestions ? (
                 <p className="text-xs text-muted-foreground">Chargement…</p>
               ) : visibleQuestions.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  Aucune question configurée pour ce produit. Le superviseur
-                  peut en ajouter depuis la page Produits.
+                  {visitType === "pharmacien"
+                    ? "Aucune question configurée pour les pharmaciens. Le superviseur peut en ajouter depuis la page Produits."
+                    : "Aucune question configurée pour ce produit. Le superviseur peut en ajouter depuis la page Produits."}
                 </p>
+              ) : visitType === "pharmacien" ? (
+                // Group by product for pharmacien visits
+                Array.from(
+                  visibleQuestions.reduce((map, q) => {
+                    const key = q.product_id;
+                    if (!map.has(key)) {
+                      map.set(key, {
+                        productName: q.product?.name || "Produit",
+                        questions: [],
+                      });
+                    }
+                    map.get(key)!.questions.push(q);
+                    return map;
+                  }, new Map<string, { productName: string; questions: ProductQuestionWithProduct[] }>())
+                ).map(([groupProductId, group]) => (
+                  <div key={groupProductId} className="space-y-2 pt-2 first:pt-0">
+                    <h4 className="text-xs font-bold uppercase tracking-wide text-primary/80 border-b border-border/40 pb-1">
+                      {group.productName}
+                    </h4>
+                    {group.questions.map((q) => (
+                      <QuestionInput
+                        key={q.id}
+                        question={q}
+                        answer={answers[q.id]}
+                        onChange={(update) => setAnswer(q.id, update)}
+                      />
+                    ))}
+                  </div>
+                ))
               ) : (
                 visibleQuestions.map((q) => (
                   <QuestionInput

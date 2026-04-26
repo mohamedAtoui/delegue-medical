@@ -53,7 +53,7 @@ export async function fetchVisits(opts: VisitQueryOptions): Promise<VisitsResult
   let query = supabase
     .from("visits")
     .select(
-      `*, ${doctorSelect}, user:users(*), visit_answers:visit_answers(*, question:product_questions(*))`,
+      `*, ${doctorSelect}, user:users(*), visit_answers:visit_answers(*, question:product_questions(*, product:products(id, name)))`,
       { count: "exact" }
     );
 
