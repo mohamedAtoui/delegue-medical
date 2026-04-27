@@ -483,7 +483,7 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
 
         <Button
           type="submit"
-          disabled={loading || !doctor || !productId || (planNext && !nextDeadline)}
+          disabled={loading || !doctor || (visitType === "medecin" && !productId) || (planNext && !nextDeadline)}
           className="w-full cursor-pointer"
           size="lg"
         >
