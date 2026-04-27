@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-
-const SUPERVISOR_EMAILS = [
-  "attaimen40@gmail.com",
-  "sarl.handson@gmail.com",
-];
+import { isSupervisorEmail } from "@/lib/config";
 
 interface ClerkWebhookEvent {
   type: string;
@@ -24,7 +20,7 @@ export async function POST(request: NextRequest) {
 
   if (type === "user.created") {
     const email = data.email_addresses[0]?.email_address ?? "";
-    const isSupervisor = SUPERVISOR_EMAILS.includes(email);
+    const isSupervisor = isSupervisorEmail(email);
 
     // Allowlist check
     if (!isSupervisor && email) {

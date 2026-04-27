@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { ClipboardList, Users, Stethoscope, TrendingUp } from "lucide-react";
+import { ClipboardList, Users, Stethoscope } from "lucide-react";
 
 interface StatsCardsProps {
   totalVisits: number;
