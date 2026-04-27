@@ -1,0 +1,49 @@
+name: CI
+
+# Runs on:
+#  - Every push to dev (validates the working branch)
+#  - Every PR (any → main, dev → main especially) — required to pass to merge
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [main, dev]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint • Test • Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npx next lint
+        continue-on-error: true # warnings only; build failure catches blockers
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build (verifies type-checking + Next compile)
+        run: npm run build
+        env:
+          # Build needs *some* values present — they're not used at build time
+          # for runtime data, only to prove the code compiles.
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_dummy
+          CLERK_SECRET_KEY: sk_test_dummy
+          NEXT_PUBLIC_SUPABASE_URL: https://dummy.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY: dummy
+          SUPABASE_SERVICE_ROLE_KEY: dummy
