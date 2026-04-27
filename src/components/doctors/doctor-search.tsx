@@ -67,6 +67,7 @@ export function DoctorSearch({
           <p className="text-xs text-muted-foreground truncate">
             {selectedDoctor.specialty ? `${selectedDoctor.specialty} · ` : ""}
             {selectedDoctor.wilaya}
+            {selectedDoctor.commune ? `, ${selectedDoctor.commune}` : ""}
           </p>
         </div>
         <Button
@@ -127,6 +128,7 @@ export function DoctorSearch({
                       <p className="text-xs text-muted-foreground truncate">
                         {doctor.specialty ? `${doctor.specialty} · ` : ""}
                         {doctor.wilaya}
+                        {doctor.commune ? `, ${doctor.commune}` : ""}
                       </p>
                     </div>
                   </button>

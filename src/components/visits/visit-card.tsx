@@ -27,6 +27,7 @@ interface DoctorVisitGroupProps {
   doctorName: string;
   specialty: string | null;
   wilaya: string;
+  commune?: string | null;
   address?: string | null;
   visits: VisitWithDetails[];
   doctorType?: DoctorType;
@@ -44,6 +45,7 @@ export function DoctorVisitGroup({
   doctorName,
   specialty,
   wilaya,
+  commune,
   address,
   visits,
   doctorType,
@@ -111,6 +113,7 @@ export function DoctorVisitGroup({
                   <MapPin className="h-3 w-3 shrink-0" />
                   <span className="truncate">
                     {wilaya}
+                    {commune ? `, ${commune}` : ""}
                     {address ? ` — ${address}` : ""}
                   </span>
                 </span>

@@ -120,6 +120,7 @@ export default function DoctorDetailPage() {
                   <div className="flex items-center gap-2">
                     <MapPin className="h-4 w-4" />
                     {doctor.wilaya}
+                    {doctor.commune ? `, ${doctor.commune}` : ""}
                     {doctor.address && ` — ${doctor.address}`}
                   </div>
                   {doctor.phone_fixe && (
@@ -201,6 +202,7 @@ export default function DoctorDetailPage() {
           doctorName={`${isPharmacien ? "" : "Dr. "}${doctor.last_name} ${doctor.first_name}`.trim()}
           specialty={doctor.specialty || null}
           wilaya={doctor.wilaya || ""}
+          commune={doctor.commune || null}
           address={doctor.address || null}
           visits={visits}
           doctorType={doctor.doctor_type as import("@/types").DoctorType}

@@ -72,6 +72,7 @@ export interface Doctor {
   latitude: number | null;
   longitude: number | null;
   wilaya: string;
+  commune: string | null;
   phone: string | null;
   phone_fixe: string | null;
   phone_mobile: string | null;

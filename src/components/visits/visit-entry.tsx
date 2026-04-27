@@ -669,6 +669,7 @@ export function VisitEntry({
                   <MapPin className="h-2.5 w-2.5 shrink-0" />
                   <span className="truncate">
                     {visit.doctor.wilaya}
+                    {visit.doctor.commune ? `, ${visit.doctor.commune}` : ""}
                     {visit.doctor.address ? ` — ${visit.doctor.address}` : ""}
                   </span>
                 </span>

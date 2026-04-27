@@ -274,6 +274,7 @@ export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
                           <span className="flex items-center gap-1 text-xs text-muted-foreground">
                             <MapPin className="h-3 w-3" />
                             {doctor.wilaya}
+                            {doctor.commune ? `, ${doctor.commune}` : ""}
                           </span>
                           {phoneDisplay && (
                             <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -323,6 +324,7 @@ export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
                         <div className="flex items-center gap-2">
                           <MapPin className="h-4 w-4" />
                           {doctor.wilaya}
+                          {doctor.commune ? `, ${doctor.commune}` : ""}
                           {doctor.address && ` — ${doctor.address}`}
                         </div>
                         {doctor.phone_fixe && (

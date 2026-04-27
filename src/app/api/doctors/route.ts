@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
     address,
     google_maps_url,
     wilaya,
+    commune,
     phone_fixe,
     phone_mobile,
     email,
@@ -85,6 +86,7 @@ export async function POST(request: NextRequest) {
       address: address || null,
       google_maps_url: google_maps_url || null,
       wilaya,
+      commune: commune?.trim() || null,
       phone: phone_mobile || phone_fixe || null, // backward compat
       phone_fixe: phone_fixe || null,
       phone_mobile: phone_mobile || null,

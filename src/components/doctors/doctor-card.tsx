@@ -58,6 +58,7 @@ export function DoctorCard({ doctor, onClick }: DoctorCardProps) {
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <MapPin className="h-3 w-3" />
               {doctor.wilaya}
+              {doctor.commune ? `, ${doctor.commune}` : ""}
             </span>
             {phoneDisplay && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">

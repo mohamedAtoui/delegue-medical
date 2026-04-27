@@ -183,6 +183,7 @@ export default function DeleguesPage() {
           doctorName: string;
           specialty: string | null;
           wilaya: string;
+          commune: string | null;
           address: string | null;
           doctorType: DoctorType;
           visits: VisitWithDetails[];
@@ -197,6 +198,7 @@ export default function DeleguesPage() {
             doctorName: `${isPharm ? "" : "Dr. "}${v.doctor?.last_name || ""} ${v.doctor?.first_name || ""}`.trim(),
             specialty: v.doctor?.specialty || null,
             wilaya: v.doctor?.wilaya || "",
+            commune: v.doctor?.commune || null,
             address: v.doctor?.address || null,
             doctorType: (v.doctor?.doctor_type || "medecin") as DoctorType,
             visits: [],
@@ -792,6 +794,7 @@ export default function DeleguesPage() {
                       doctorName={group.doctorName}
                       specialty={group.specialty}
                       wilaya={group.wilaya}
+                      commune={group.commune}
                       address={group.address}
                       visits={group.visits}
                       doctorType={group.doctorType}

@@ -51,6 +51,7 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
     address: "",
     google_maps_url: "",
     wilaya: "",
+    commune: "",
     phone_fixe: "",
     phone_mobile: "",
     email: "",
@@ -70,6 +71,7 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
         address: initialData.address || "",
         google_maps_url: initialData.google_maps_url || "",
         wilaya: initialData.wilaya || "",
+        commune: initialData.commune || "",
         phone_fixe: initialData.phone_fixe || "",
         phone_mobile: initialData.phone_mobile || initialData.phone || "",
         email: initialData.email || "",
@@ -232,6 +234,17 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
         <WilayaSelect
           value={form.wilaya}
           onValueChange={(v) => setForm({ ...form, wilaya: v })}
+        />
+      </div>
+
+      {/* Commune */}
+      <div className="space-y-2">
+        <Label htmlFor="commune">Commune</Label>
+        <Input
+          id="commune"
+          value={form.commune}
+          onChange={(e) => setForm({ ...form, commune: e.target.value })}
+          placeholder="Ex: Hydra, Bab El Oued..."
         />
       </div>
 
