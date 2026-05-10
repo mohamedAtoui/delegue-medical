@@ -117,7 +117,7 @@ export function InlineComments({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          assignee_id: "self",
+          assignee_id: visitAuthorId,
           doctor_id: doctorId,
           deadline: planDeadline,
           note: planNote || null,

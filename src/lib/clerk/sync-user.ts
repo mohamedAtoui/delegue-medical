@@ -1,11 +1,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { createClient } from "@/utils/supabase/server";
+import { isSupervisorEmail } from "@/lib/config";
 import type { User } from "@/types";
-
-const SUPERVISOR_EMAILS = [
-  "attaimen40@gmail.com",
-  "sarl.handson@gmail.com",
-];
 
 export async function getOrCreateUser(): Promise<User | null> {
   const { userId } = await auth();
@@ -40,7 +36,7 @@ export async function getOrCreateUser(): Promise<User | null> {
   if (!clerkUser) return null;
 
   const email = clerkUser.emailAddresses[0]?.emailAddress ?? "";
-  const isSupervisor = SUPERVISOR_EMAILS.includes(email);
+  const isSupervisor = isSupervisorEmail(email);
 
   // Allowlist check: only invited emails (or supervisors) can create an account
   if (!isSupervisor && email) {

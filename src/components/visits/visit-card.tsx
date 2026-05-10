@@ -16,7 +16,6 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { VisitEntry } from "@/components/visits/visit-entry";
-import { cn } from "@/lib/utils";
 import type { VisitWithDetails, DoctorType } from "@/types";
 
 // Re-export for backward compat

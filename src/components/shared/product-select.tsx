@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Select,
   SelectContent,
@@ -19,14 +19,24 @@ export function ProductSelect({ value, onValueChange }: ProductSelectProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loaded, setLoaded] = useState(false);
 
+  // Stable refs let us fire the auto-select side-effect from a mount-only
+  // effect without re-fetching whenever the parent re-renders with a new
+  // callback identity.
+  const valueRef = useRef(value);
+  const onValueChangeRef = useRef(onValueChange);
+  useEffect(() => {
+    valueRef.current = value;
+    onValueChangeRef.current = onValueChange;
+  });
+
   useEffect(() => {
     fetch("/api/products")
       .then((res) => res.json())
       .then((data) => {
         setProducts(data);
         setLoaded(true);
-        if (data.length === 1 && !value) {
-          onValueChange(data[0].id);
+        if (data.length === 1 && !valueRef.current) {
+          onValueChangeRef.current(data[0].id);
         }
       });
   }, []);
