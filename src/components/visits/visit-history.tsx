@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { DoctorVisitGroup } from "./visit-card";
 import { Button } from "@/components/ui/button";
 import { MedicalLoader } from "@/components/ui/medical-loader";
-import type { VisitWithDetails, DoctorType } from "@/types";
+import type { VisitWithDetails, DoctorType, Potentiel } from "@/types";
 
 interface VisitHistoryProps {
   refreshKey?: number;
@@ -29,6 +29,7 @@ interface DoctorGroup {
   wilaya: string;
   commune: string | null;
   address: string | null;
+  potentiel: Potentiel | null;
   doctorType: DoctorType;
   visits: VisitWithDetails[];
 }
@@ -46,6 +47,7 @@ function groupByDoctor(visits: VisitWithDetails[]): DoctorGroup[] {
         wilaya: visit.doctor?.wilaya || "",
         commune: visit.doctor?.commune || null,
         address: visit.doctor?.address || null,
+        potentiel: visit.doctor?.potentiel ?? null,
         doctorType: (visit.doctor?.doctor_type || "medecin") as DoctorType,
         visits: [],
       });
@@ -151,6 +153,7 @@ export function VisitHistory({
           wilaya={group.wilaya}
           commune={group.commune}
           address={group.address}
+          potentiel={group.potentiel}
           visits={group.visits}
           doctorType={group.doctorType}
           showUser={showUser}
