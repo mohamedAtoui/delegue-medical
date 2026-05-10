@@ -204,6 +204,7 @@ export default function DoctorDetailPage() {
           wilaya={doctor.wilaya || ""}
           commune={doctor.commune || null}
           address={doctor.address || null}
+          potentiel={doctor.potentiel || null}
           visits={visits}
           doctorType={doctor.doctor_type as import("@/types").DoctorType}
           showUser

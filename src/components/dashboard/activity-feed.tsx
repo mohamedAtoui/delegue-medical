@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity } from "lucide-react";
 import { DoctorVisitGroup } from "@/components/visits/visit-card";
 import { MedicalLoader } from "@/components/ui/medical-loader";
-import type { VisitWithDetails, DoctorType } from "@/types";
+import type { VisitWithDetails, DoctorType, Potentiel } from "@/types";
 
 interface DoctorGroup {
   doctorId: string;
@@ -15,6 +15,7 @@ interface DoctorGroup {
   wilaya: string;
   commune: string | null;
   address: string | null;
+  potentiel: Potentiel | null;
   doctorType: DoctorType;
   visits: VisitWithDetails[];
 }
@@ -75,6 +76,7 @@ export function ActivityFeed({ initialVisits }: ActivityFeedProps = {}) {
           wilaya: visit.doctor?.wilaya || "",
           commune: visit.doctor?.commune || null,
           address: visit.doctor?.address || null,
+          potentiel: visit.doctor?.potentiel ?? null,
           doctorType: (visit.doctor?.doctor_type || "medecin") as DoctorType,
           visits: [],
         });
@@ -118,6 +120,7 @@ export function ActivityFeed({ initialVisits }: ActivityFeedProps = {}) {
                 wilaya={group.wilaya}
                 commune={group.commune}
                 address={group.address}
+                potentiel={group.potentiel}
                 visits={group.visits}
                 doctorType={group.doctorType}
                 showUser

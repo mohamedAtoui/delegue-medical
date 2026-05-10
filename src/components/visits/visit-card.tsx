@@ -16,7 +16,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { VisitEntry } from "@/components/visits/visit-entry";
-import type { VisitWithDetails, DoctorType } from "@/types";
+import type { VisitWithDetails, DoctorType, Potentiel } from "@/types";
 
 // Re-export for backward compat
 export { InlineComments } from "@/components/visits/visit-entry";
@@ -28,6 +28,7 @@ interface DoctorVisitGroupProps {
   wilaya: string;
   commune?: string | null;
   address?: string | null;
+  potentiel?: Potentiel | null;
   visits: VisitWithDetails[];
   doctorType?: DoctorType;
   showUser?: boolean;
@@ -46,6 +47,7 @@ export function DoctorVisitGroup({
   wilaya,
   commune,
   address,
+  potentiel,
   visits,
   doctorType,
   showUser = false,
@@ -132,6 +134,19 @@ export function DoctorVisitGroup({
                     locale: fr,
                   })}
                 </span>
+                {potentiel && (
+                  <Badge
+                    className={`text-xs px-1.5 py-0 ${
+                      potentiel === "A"
+                        ? "bg-green-100 text-green-700 hover:bg-green-100"
+                        : potentiel === "B"
+                        ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-100"
+                        : "bg-red-100 text-red-700 hover:bg-red-100"
+                    }`}
+                  >
+                    {potentiel}
+                  </Badge>
+                )}
               </div>
             </div>
           </div>

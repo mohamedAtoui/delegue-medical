@@ -42,7 +42,7 @@ import {
   CalendarCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { User as UserType, VisitWithDetails, DoctorType } from "@/types";
+import type { User as UserType, VisitWithDetails, DoctorType, Potentiel } from "@/types";
 
 type GroupBy = "doctor" | "date" | "wilaya";
 type TypeFilter = "" | DoctorType;
@@ -185,6 +185,7 @@ export default function DeleguesPage() {
           wilaya: string;
           commune: string | null;
           address: string | null;
+          potentiel: Potentiel | null;
           doctorType: DoctorType;
           visits: VisitWithDetails[];
         }
@@ -200,6 +201,7 @@ export default function DeleguesPage() {
             wilaya: v.doctor?.wilaya || "",
             commune: v.doctor?.commune || null,
             address: v.doctor?.address || null,
+            potentiel: v.doctor?.potentiel ?? null,
             doctorType: (v.doctor?.doctor_type || "medecin") as DoctorType,
             visits: [],
           });
@@ -796,6 +798,7 @@ export default function DeleguesPage() {
                       wilaya={group.wilaya}
                       commune={group.commune}
                       address={group.address}
+                      potentiel={group.potentiel}
                       visits={group.visits}
                       doctorType={group.doctorType}
                       showUser
