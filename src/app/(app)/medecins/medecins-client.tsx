@@ -154,7 +154,11 @@ export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
           return (
             <button
               key={tab.key}
-              onClick={() => setTypeFilter(tab.key)}
+              onClick={() => {
+                setTypeFilter(tab.key);
+                // Pharmaciens have no specialty — clear it to avoid empty results
+                if (tab.key === "pharmacien") setSpecialty("");
+              }}
               className={cn(
                 "flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-all cursor-pointer",
                 active

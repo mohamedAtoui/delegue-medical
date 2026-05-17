@@ -208,6 +208,7 @@ export default function DoctorDetailPage() {
           visits={visits}
           doctorType={doctor.doctor_type as import("@/types").DoctorType}
           showUser
+          hideHistoryToggle
         />
       ) : (
         <Card>
