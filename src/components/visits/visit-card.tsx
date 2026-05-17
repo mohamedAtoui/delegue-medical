@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Stethoscope,
   Pill,
@@ -14,6 +15,8 @@ import {
   ChevronUp,
   Clock,
   MessageSquare,
+  History,
+  Loader2,
 } from "lucide-react";
 import { VisitEntry } from "@/components/visits/visit-entry";
 import type { VisitWithDetails, DoctorType, Potentiel } from "@/types";
@@ -38,6 +41,11 @@ interface DoctorVisitGroupProps {
   onVisitDelete?: (visitId: string) => void;
   /** Auto-expand if this id matches one of our visits */
   highlightVisitId?: string;
+  /**
+   * Skip the "Voir l'historique complet" footer button. Useful when the
+   * parent context already shows the full history (e.g. doctor profile page).
+   */
+  hideHistoryToggle?: boolean;
 }
 
 export function DoctorVisitGroup({
@@ -56,11 +64,18 @@ export function DoctorVisitGroup({
   highlightVisitId,
   userRole,
   onVisitDelete,
+  hideHistoryToggle = false,
 }: DoctorVisitGroupProps) {
   // Auto-expand on initial mount if a highlighted visit belongs to this group
   const [expanded, setExpanded] = useState<boolean>(() =>
     !!(highlightVisitId && visits.some((v) => v.id === highlightVisitId))
   );
+
+  // Full doctor history (loaded on demand)
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyVisits, setHistoryVisits] = useState<VisitWithDetails[] | null>(null);
+  const [historyLoadedOnce, setHistoryLoadedOnce] = useState(false);
 
   const lastVisit = visits[0];
   const totalComments = visits.reduce(
@@ -75,6 +90,36 @@ export function DoctorVisitGroup({
   const Icon = isPharm ? Pill : Stethoscope;
   const iconBg = isPharm ? "bg-accent/10" : "bg-primary/10";
   const iconColor = isPharm ? "text-accent" : "text-primary";
+
+  // Visit IDs already shown in the current group (to dedupe history results)
+  const visibleIds = new Set(visits.map((v) => v.id));
+
+  // Visits in the history fetch that AREN'T already shown above
+  const extraHistoryVisits = (historyVisits ?? []).filter(
+    (v) => !visibleIds.has(v.id)
+  );
+
+  const loadHistory = async () => {
+    if (!doctorId || historyLoadedOnce) {
+      setHistoryOpen(!historyOpen);
+      return;
+    }
+    setHistoryLoading(true);
+    setHistoryOpen(true);
+    try {
+      const res = await fetch(
+        `/api/visits?doctor_id=${doctorId}&all=true&limit=100`
+      );
+      const data = await res.json();
+      setHistoryVisits(Array.isArray(data.data) ? data.data : []);
+      setHistoryLoadedOnce(true);
+    } catch {
+      setHistoryVisits([]);
+      setHistoryLoadedOnce(true);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   return (
     <Card
@@ -178,6 +223,63 @@ export function DoctorVisitGroup({
                 highlightVisitId={highlightVisitId}
               />
             ))}
+
+            {/* History toggle — only when we have a doctorId AND the parent
+                didn't disable it (e.g. doctor profile page already shows
+                everything). */}
+            {!hideHistoryToggle && doctorId && (
+              <div className="pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    loadHistory();
+                  }}
+                  disabled={historyLoading}
+                  className="w-full justify-between cursor-pointer text-xs h-8 border-dashed"
+                >
+                  <span className="flex items-center gap-2">
+                    {historyLoading ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <History className="h-3 w-3" />
+                    )}
+                    {historyLoadedOnce
+                      ? extraHistoryVisits.length > 0
+                        ? `${extraHistoryVisits.length} visite${
+                            extraHistoryVisits.length > 1 ? "s" : ""
+                          } supplémentaire${extraHistoryVisits.length > 1 ? "s" : ""}`
+                        : "Aucune autre visite"
+                      : "Voir l'historique complet de ce médecin"}
+                  </span>
+                  {historyOpen ? (
+                    <ChevronUp className="h-3 w-3" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3" />
+                  )}
+                </Button>
+
+                {historyOpen && historyLoadedOnce && extraHistoryVisits.length > 0 && (
+                  <div className="mt-2 space-y-2 pl-3 border-l-2 border-primary/20">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground/80 font-semibold">
+                      Visites précédentes
+                    </p>
+                    {extraHistoryVisits.map((visit) => (
+                      <VisitEntry
+                        key={visit.id}
+                        visit={visit}
+                        showUser={showUser}
+                        highlightUserId={highlightUserId}
+                        userRole={userRole}
+                        onDelete={onVisitDelete}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </CardContent>
