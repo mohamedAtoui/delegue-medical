@@ -1112,19 +1112,83 @@ def section_planning(d: dict[str, pd.DataFrame]) -> str:
 
 
 # ─── Report assembly ───────────────────────────────────────────────────
+PDF_YAML_HEADER = """---
+title: "Handson — Rapport d'analyse"
+subtitle: "Synthèse des visites médecins & pharmaciens"
+date: "{date}"
+geometry: "left=2cm,right=2cm,top=2cm,bottom=2cm"
+fontsize: 10pt
+documentclass: article
+colorlinks: true
+linkcolor: blue
+urlcolor: blue
+header-includes:
+  - \\setlength{{\\parskip}}{{0.35em}}
+---
+
+"""
+
+
 def write_report(sections: list[str]) -> None:
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     generated_at = datetime.now(timezone.utc).strftime("%d %B %Y — %Hh%M UTC")
-    header = (
+
+    # Markdown version (for VS Code preview / GitHub) — no YAML header
+    md_header = (
         f"# Analyse Handson Délégué Médical\n\n"
         f"_Généré le {generated_at}_\n\n"
-        "Rapport automatique à partir des exports CSV Supabase. "
-        "Re-générer avec `python3 analysis/analyze.py` après chaque nouvel export.\n\n"
         "---\n"
     )
-    REPORT.write_text(header + "\n\n---\n\n".join(sections))
-    print(f"✓ Report → {REPORT}")
-    print(f"✓ Charts → {CHARTS}/")
+    body = "\n\n---\n\n".join(sections)
+    REPORT.write_text(md_header + body)
+    print(f"✓ Markdown → {REPORT}")
+    print(f"✓ Charts   → {CHARTS}/")
+
+    # PDF version — YAML metadata header + same body, rendered by pandoc
+    pdf_md_path = DATA / "_ANALYSIS_pdf.md"
+    pdf_md_path.write_text(PDF_YAML_HEADER.format(date=generated_at) + body)
+    generate_pdf(pdf_md_path)
+    pdf_md_path.unlink(missing_ok=True)
+
+
+def generate_pdf(source_md: Path) -> None:
+    """Convert the markdown source to a PDF via pandoc + xelatex."""
+    import shutil
+    import subprocess
+
+    pdf_out = REPORT.with_suffix(".pdf")
+    if not shutil.which("pandoc"):
+        print("⚠ pandoc not found — skipping PDF generation. Install: brew install pandoc")
+        return
+    if not shutil.which("xelatex"):
+        print("⚠ xelatex not found — skipping PDF generation. Install: brew install --cask mactex")
+        return
+
+    cmd = [
+        "pandoc", str(source_md),
+        "-o", str(pdf_out),
+        "--pdf-engine=xelatex",
+        "--variable=mainfont=Helvetica Neue",
+        "--variable=monofont=Menlo",
+        "--toc",
+        "--toc-depth=2",
+        # Resolve relative chart paths (data/charts/*.png in markdown)
+        f"--resource-path={DATA}",
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if result.returncode == 0:
+            print(f"✓ PDF      → {pdf_out}")
+        else:
+            print(f"⚠ pandoc failed (code {result.returncode}):")
+            # Show only the most relevant error line(s)
+            err_lines = [l for l in result.stderr.splitlines() if l.strip()][:5]
+            for line in err_lines:
+                print(f"  {line}")
+    except subprocess.TimeoutExpired:
+        print("⚠ pandoc timed out after 2 min")
+    except Exception as e:
+        print(f"⚠ PDF generation error: {e}")
 
 
 def clear_charts() -> None:
