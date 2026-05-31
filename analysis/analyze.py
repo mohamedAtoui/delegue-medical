@@ -38,6 +38,13 @@ CSV_FILES = {
     "assignments": "v_assignments_outcomes_rows.csv",
 }
 
+# ─── Active-delegue filter ─────────────────────────────────────────────
+# We treat any registered délégué with 0 visits as a TEST account and
+# exclude them from the analysis. Override here if a real rep happens to
+# have 0 visits for a period (rare — usually they're onboarding).
+def is_test_delegue(row) -> bool:
+    return int(row.get("visits_total", 0) or 0) == 0
+
 # Chart styling — keep it consistent + readable
 plt.rcParams.update(
     {
@@ -82,6 +89,23 @@ def load_csvs() -> dict[str, pd.DataFrame]:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors="coerce", utc=True)
         out[name] = df
+
+    # Identify test délégué accounts (0 visits) and excise them everywhere
+    deleg = out["delegues"]
+    test_mask = deleg.apply(is_test_delegue, axis=1)
+    out["test_delegues"] = deleg[test_mask].copy()
+    out["delegues"] = deleg[~test_mask].copy()
+
+    real_ids = set(out["delegues"]["delegue_id"].tolist())
+    # Visits, comments, assignments authored by test accounts → drop.
+    # (Doctors aren't tied to a single delegue, so we keep all of them.)
+    if "delegue_id" in out["visits"].columns:
+        out["visits"] = out["visits"][out["visits"]["delegue_id"].isin(real_ids)].copy()
+    if "assignee_name" in out["assignments"].columns and not out["delegues"].empty:
+        real_names = set(out["delegues"]["delegue_name"].tolist())
+        out["assignments"] = out["assignments"][
+            out["assignments"]["assignee_name"].isin(real_names)
+        ].copy()
     return out
 
 
@@ -122,86 +146,70 @@ def md_table(df: pd.DataFrame, max_rows: Optional[int] = None) -> str:
 def section_overview(d: dict[str, pd.DataFrame]) -> str:
     v = d["visits"]
     deleg = d["delegues"]
+    test = d["test_delegues"]
     doctors = d["doctors"]
 
     total_visits = len(v)
     total_doctors = len(doctors)
-    total_delegues = len(deleg)
-    active_delegues = int((deleg["visits_total"] > 0).sum())
+    n_real = len(deleg)
+    n_test = len(test)
 
     now = now_utc()
     last_7d = int((v["visit_date"] >= now - pd.Timedelta(days=7)).sum())
     last_30d = int((v["visit_date"] >= now - pd.Timedelta(days=30)).sum())
     last_90d = int((v["visit_date"] >= now - pd.Timedelta(days=90)).sum())
 
-    # Avg visits/day for the active delegue(s) over the period they've been
-    # active (first → last visit)
-    active = deleg[deleg["visits_total"] > 0]
-    avg_per_active_per_day = None
-    if not active.empty:
-        spans = []
-        for _, row in active.iterrows():
-            mine = v[v["delegue_id"] == row["delegue_id"]]
-            if len(mine) > 1:
-                span_days = max(
-                    1,
-                    (mine["visit_date"].max() - mine["visit_date"].min()).days,
-                )
-                spans.append(len(mine) / span_days)
-        if spans:
-            avg_per_active_per_day = sum(spans) / len(spans)
+    # Period span (first → last visit) + visits/day average
+    span_md = "—"
+    avg_md = "—"
+    if not v.empty:
+        first = v["visit_date"].min()
+        last = v["visit_date"].max()
+        days = max(1, (last - first).days)
+        avg_md = f"{len(v) / days:.1f}"
+        span_md = f"{first.strftime('%d %b %Y')} → {last.strftime('%d %b %Y')} ({days} j)"
+
+    test_md = ""
+    if n_test:
+        test_names = ", ".join(test["delegue_name"].tolist())
+        test_md = (
+            f"\n> ℹ️  **{n_test} compte(s) test exclu(s)** : {test_names}.\n"
+            "> _Reste du rapport calculé uniquement sur les comptes actifs._\n"
+        )
 
     return f"""## 1. Vue d'ensemble
 
 | Métrique | Valeur |
 |---|---:|
+| Délégué(s) actif(s) | **{n_real}** |
 | Visites totales | **{total_visits}** |
+| Période couverte | {span_md} |
 | Médecins / pharmaciens dans le répertoire | **{total_doctors}** |
-| Délégués inscrits | **{total_delegues}** |
-| Délégués actifs (≥1 visite) | **{active_delegues}** / {total_delegues} |
 | Visites — 7 derniers jours | {last_7d} |
 | Visites — 30 derniers jours | {last_30d} |
 | Visites — 90 derniers jours | {last_90d} |
-| Moyenne visites/jour (délégué actif) | {f"{avg_per_active_per_day:.1f}" if avg_per_active_per_day else "—"} |
-"""
+| Moyenne visites/jour (sur toute la période) | {avg_md} |
+{test_md}"""
 
 
 def section_delegue_scorecard(d: dict[str, pd.DataFrame]) -> str:
     deleg = d["delegues"].copy()
     v = d["visits"]
 
-    # Add days_since_last_visit
+    if deleg.empty:
+        return "## 2. Scorecard des délégués\n\n_Aucun délégué actif._\n"
+
     now = now_utc()
     deleg["days_since_last_visit"] = deleg["last_visit_at"].apply(
         lambda t: days_between(now, t) if pd.notna(t) else None
     )
 
-    # Goal-hit-rate: % of (delegue, day) pairs where visits>=goal, only counting
-    # délégués with a goal set
-    goal_hit_lines = []
-    for _, dlg in deleg[deleg["daily_visit_goal"] > 0].iterrows():
-        mine = v[v["delegue_id"] == dlg["delegue_id"]]
-        if mine.empty:
-            continue
-        per_day = (
-            mine.groupby(mine["visit_date"].dt.date).size().reset_index(name="count")
-        )
-        per_day["goal_met"] = per_day["count"] >= dlg["daily_visit_goal"]
-        days_total = len(per_day)
-        days_met = int(per_day["goal_met"].sum())
-        pct = round(100 * days_met / days_total, 1) if days_total else 0
-        goal_hit_lines.append(
-            f"- **{dlg['delegue_name']}** — objectif {int(dlg['daily_visit_goal'])}/jour : "
-            f"atteint {days_met}/{days_total} jours travaillés ({pct}%)"
-        )
+    # When there's only one active rep we render a deeper single-rep view
+    # rather than a one-row table.
+    if len(deleg) == 1:
+        return _single_rep_section(deleg.iloc[0], v)
 
-    # Inactive flags
-    inactive = deleg[
-        (deleg["visits_total"] == 0)
-        | (deleg["days_since_last_visit"].fillna(999) >= 14)
-    ]
-
-    # Table
+    # ── Multi-rep view (kept for when team grows) ──────────────────────
     cols = [
         "delegue_name",
         "visits_total",
@@ -211,7 +219,7 @@ def section_delegue_scorecard(d: dict[str, pd.DataFrame]) -> str:
         "completion_rate_pct",
         "days_since_last_visit",
     ]
-    deleg_view = deleg[cols].rename(
+    table = deleg[cols].rename(
         columns={
             "delegue_name": "Délégué",
             "visits_total": "Visites",
@@ -223,42 +231,94 @@ def section_delegue_scorecard(d: dict[str, pd.DataFrame]) -> str:
         }
     ).sort_values("Visites", ascending=False)
 
-    # Chart: visits per delegue
-    if not deleg[deleg["visits_total"] > 0].empty:
-        fig, ax = plt.subplots(figsize=(7, max(2.5, 0.5 * len(deleg))))
-        plot_data = deleg.sort_values("visits_total", ascending=True)
-        colors = [
-            GREEN if x >= 200 else PRIMARY if x > 0 else "#cbd5e1"
-            for x in plot_data["visits_total"]
-        ]
-        ax.barh(plot_data["delegue_name"], plot_data["visits_total"], color=colors)
-        ax.set_xlabel("Nombre de visites")
-        ax.set_title("Visites par délégué (cumul)")
-        chart_path = save_chart("visits_per_delegue")
-    else:
-        chart_path = None
-
-    inactive_md = ""
-    if not inactive.empty:
-        inactive_md = "\n### ⚠️ Délégués inactifs\n" + "\n".join(
-            f"- **{r['delegue_name']}** — "
-            + (
-                "aucune visite"
-                if r["visits_total"] == 0
-                else f"dernière visite il y a {int(r['days_since_last_visit'])} jours"
-            )
-            for _, r in inactive.iterrows()
-        )
+    fig, ax = plt.subplots(figsize=(7, max(2.5, 0.5 * len(deleg))))
+    plot_data = deleg.sort_values("visits_total", ascending=True)
+    ax.barh(plot_data["delegue_name"], plot_data["visits_total"], color=PRIMARY)
+    ax.set_xlabel("Nombre de visites")
+    ax.set_title("Visites par délégué (cumul)")
+    chart = save_chart("visits_per_delegue")
 
     return f"""## 2. Scorecard des délégués
 
-{md_table(deleg_view)}
+{md_table(table)}
 
-{f'![Visites par délégué]({chart_path})' if chart_path else ''}
+![Visites par délégué]({chart})
+"""
 
-### Atteinte de l'objectif quotidien
-{chr(10).join(goal_hit_lines) if goal_hit_lines else "_Aucun délégué avec objectif défini._"}
-{inactive_md}
+
+def _single_rep_section(rep: pd.Series, v: pd.DataFrame) -> str:
+    """Deep dive for one active rep — chart of daily visits + goal hit-rate."""
+    mine = v[v["delegue_id"] == rep["delegue_id"]].copy()
+    name = rep["delegue_name"]
+    goal = int(rep["daily_visit_goal"] or 0)
+
+    # Per-day visit counts across active period (no gaps)
+    per_day = mine.groupby(mine["visit_date"].dt.date).size()
+    if per_day.empty:
+        return f"## 2. Scorecard — {name}\n\n_Aucune visite enregistrée._\n"
+    full_range = pd.date_range(per_day.index.min(), per_day.index.max(), freq="D")
+    per_day = per_day.reindex(full_range.date, fill_value=0)
+
+    # Goal hit stats (only on days the rep actually worked = visits > 0)
+    worked_days = per_day[per_day > 0]
+    goal_md = ""
+    if goal > 0 and not worked_days.empty:
+        days_met = int((worked_days >= goal).sum())
+        days_total = len(worked_days)
+        pct = round(100 * days_met / days_total, 1)
+        avg_worked = worked_days.mean()
+        zeros = int((per_day == 0).sum())
+        goal_md = f"""
+### Objectif quotidien
+- **Objectif** : {goal} visites/jour
+- **Atteint** : {days_met} / {days_total} jours travaillés ({pct}%)
+- **Moyenne** un jour travaillé : {avg_worked:.1f} visites
+- **Jours sans aucune visite** dans la période : {zeros}
+"""
+
+    # Visits/day chart with goal line
+    fig, ax = plt.subplots(figsize=(11, 3.5))
+    ax.bar(per_day.index, per_day.values, color=PRIMARY, edgecolor="white")
+    if goal > 0:
+        ax.axhline(goal, color=DANGER, linestyle="--", linewidth=1.2, label=f"Objectif: {goal}")
+        ax.legend(loc="upper right")
+    ax.set_title(f"{name} — visites par jour")
+    ax.set_ylabel("Visites")
+    fig.autofmt_xdate()
+    chart = save_chart("daily_visits")
+
+    # Per-day type split chart (medecin vs pharmacien)
+    type_by_day = (
+        mine.groupby([mine["visit_date"].dt.date, "visit_type"])
+        .size()
+        .unstack(fill_value=0)
+        .reindex(full_range.date, fill_value=0)
+    )
+
+    # Week aggregates
+    mine["week"] = mine["visit_date"].dt.tz_convert(None).dt.to_period("W").apply(lambda r: r.start_time.date())
+    week_counts = mine.groupby("week").size().reset_index(name="Visites")
+    week_counts.columns = ["Semaine du", "Visites"]
+    week_counts["Semaine du"] = week_counts["Semaine du"].astype(str)
+
+    last_visit = mine["visit_date"].max()
+    days_since = (now_utc() - last_visit).days
+
+    headline = (
+        f"**{int(rep['visits_total'])} visites** couvrant **{int(rep['doctors_covered'])} médecins/pharmaciens** distincts. "
+        f"Dernière visite : {last_visit.strftime('%d %b %Y')} (il y a {days_since} j). "
+        f"Plans de visite complétés : **{rep['completion_rate_pct']}%** "
+        f"({int(rep['assignments_completed'])} sur {int(rep['assignments_total'])})."
+    )
+
+    return f"""## 2. Scorecard — {name}
+
+{headline}
+
+![Visites par jour]({chart})
+{goal_md}
+### Cadence hebdomadaire
+{md_table(week_counts)}
 """
 
 
@@ -391,17 +451,68 @@ def section_conversion_funnel(d: dict[str, pd.DataFrame]) -> str:
 
 def section_pharma(d: dict[str, pd.DataFrame]) -> str:
     v = d["visits"]
+    comments = d["comments"]
     pharm = v[v["visit_type"] == "pharmacien"].copy()
     if pharm.empty:
         return "## 5. Stock & commandes (pharmaciens)\n\n_Aucune visite pharmacien._\n"
 
-    # Order acceptance
+    # Order acceptance breakdown
     total_pharm = len(pharm)
-    accepted = int((pharm["accepted_order"] == True).sum())  # noqa: E712
-    refused = int((pharm["accepted_order"] == False).sum())  # noqa: E712
-    pct = round(100 * accepted / total_pharm, 1) if total_pharm else 0
+    accepted_mask = pharm["accepted_order"] == True   # noqa: E712
+    refused_mask = pharm["accepted_order"] == False    # noqa: E712
+    unset_count = int(pharm["accepted_order"].isna().sum())
+    accepted_n = int(accepted_mask.sum())
+    refused_n = int(refused_mask.sum())
+    answered_n = accepted_n + refused_n
+    acceptance_rate = (
+        f"{round(100 * accepted_n / answered_n, 1)}%" if answered_n else "—"
+    )
 
-    # Latest synapgen_count per pharmacy
+    # ── Surface compte_rendu for each accepted / refused order ──────────
+    # The supervisor wants to see *why*. Pull comments too as additional
+    # context (a delegue might explain in a comment rather than the report).
+
+    def trim(text: str, n: int = 220) -> str:
+        if not text or pd.isna(text):
+            return ""
+        text = str(text).strip().replace("\n", " ")
+        return text if len(text) <= n else text[:n] + "…"
+
+    def comments_for(visit_id: str) -> str:
+        rel = comments[comments["visit_id"] == visit_id]
+        if rel.empty:
+            return ""
+        snippets = [
+            f"  ↳ _{r['comment_author']}_ : « {trim(r['content'], 140)} »"
+            for _, r in rel.iterrows()
+            if pd.notna(r["content"]) and str(r["content"]).strip()
+        ]
+        return ("\n" + "\n".join(snippets)) if snippets else ""
+
+    def order_block(rows: pd.DataFrame, header: str) -> str:
+        if rows.empty:
+            return f"### {header}\n_(aucune visite)_\n"
+        lines = [f"### {header}"]
+        for _, r in rows.sort_values("visit_date", ascending=False).iterrows():
+            doc = r["doctor_name"]
+            date = r["visit_date"].strftime("%d %b %Y")
+            wilaya = r["wilaya"] or ""
+            rendu = trim(r["compte_rendu"])
+            stock = (
+                f" · stock: {int(r['synapgen_count'])}"
+                if pd.notna(r["synapgen_count"])
+                else ""
+            )
+            rendu_md = f"\n  > {rendu}" if rendu else "\n  > _(compte rendu vide)_"
+            lines.append(
+                f"- **{doc}** — {wilaya}, {date}{stock}{rendu_md}{comments_for(r['visit_id'])}"
+            )
+        return "\n".join(lines) + "\n"
+
+    accepted_md = order_block(pharm[accepted_mask], "✅ Commandes acceptées")
+    refused_md = order_block(pharm[refused_mask], "🚫 Commandes refusées")
+
+    # Latest stock snapshot
     latest_stock = (
         pharm.dropna(subset=["synapgen_count"])
         .sort_values("visit_date")
@@ -412,8 +523,23 @@ def section_pharma(d: dict[str, pd.DataFrame]) -> str:
     low_stock = latest_stock[
         (latest_stock["synapgen_count"] > 0) & (latest_stock["synapgen_count"] < 5)
     ]
+    zero_md = (
+        "_Aucune pharmacie en rupture._"
+        if zero_stock.empty
+        else "\n".join(
+            f"- {r['doctor_name']} — {r['wilaya']}" for _, r in zero_stock.iterrows()
+        )
+    )
+    low_md = (
+        "_Aucune pharmacie en stock faible._"
+        if low_stock.empty
+        else "\n".join(
+            f"- {r['doctor_name']} — {r['wilaya']} — stock: {int(r['synapgen_count'])}"
+            for _, r in low_stock.iterrows()
+        )
+    )
 
-    # Top pharmacies by prescriptions_received
+    # Top prescribers
     top_rx = (
         pharm.dropna(subset=["prescriptions_received"])
         .groupby("doctor_name")["prescriptions_received"]
@@ -429,18 +555,11 @@ def section_pharma(d: dict[str, pd.DataFrame]) -> str:
         )
     )
 
-    zero_md = (
-        "_Aucune pharmacie en rupture sur la dernière visite._"
-        if zero_stock.empty
-        else "\n".join(f"- {r['doctor_name']} — {r['wilaya']}" for _, r in zero_stock.iterrows())
-    )
-    low_md = (
-        "_Aucune pharmacie en stock faible._"
-        if low_stock.empty
-        else "\n".join(
-            f"- {r['doctor_name']} — {r['wilaya']} — stock: {int(r['synapgen_count'])}"
-            for _, r in low_stock.iterrows()
-        )
+    unset_warning = (
+        f"\n> ⚠️  **Champ « commande acceptée » non renseigné pour {unset_count} visites pharmacien sur {total_pharm}.** "
+        "Le taux d'acceptation ci-dessus est calculé uniquement sur les visites où le délégué a rempli ce champ.\n"
+        if unset_count > 0
+        else ""
     )
 
     return f"""## 5. Stock & commandes (pharmaciens)
@@ -448,9 +567,13 @@ def section_pharma(d: dict[str, pd.DataFrame]) -> str:
 | Métrique | Valeur |
 |---|---:|
 | Visites pharmacien | {total_pharm} |
-| Commandes acceptées | {accepted} ({pct}%) |
-| Commandes refusées | {refused} |
-
+| Champ « commande » renseigné | {answered_n} ({round(100 * answered_n / total_pharm, 1) if total_pharm else 0}%) |
+| Commandes acceptées | {accepted_n} |
+| Commandes refusées | {refused_n} |
+| **Taux d'acceptation** (sur visites renseignées) | **{acceptance_rate}** |
+{unset_warning}
+{accepted_md}
+{refused_md}
 ### 🚨 Pharmacies en rupture (synapgen_count = 0 à la dernière visite)
 {zero_md}
 
