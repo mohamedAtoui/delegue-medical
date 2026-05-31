@@ -923,40 +923,128 @@ def section_comments(d: dict[str, pd.DataFrame]) -> str:
     if c.empty:
         return "## 6. Voix du terrain (commentaires)\n\n_Aucun commentaire._\n"
 
-    keywords = ["prix", "refuse", "intéress", "rupture", "commande", "promis"]
-    pattern = "|".join(keywords)
     c = c.copy()
-    c["content"] = c["content"].fillna("")
-    mentions = c[c["content"].str.contains(pattern, case=False, regex=True, na=False)]
+    c["content"] = c["content"].fillna("").astype(str)
+    # Strip accents for matching, but display original
+    import unicodedata
+    def strip_accents(s: str) -> str:
+        return "".join(ch for ch in unicodedata.normalize("NFD", s) if unicodedata.category(ch) != "Mn").lower()
+    c["norm"] = c["content"].apply(strip_accents)
 
-    by_kw = {kw: int(c["content"].str.contains(kw, case=False, na=False).sum()) for kw in keywords}
+    # ── Themed keyword groups — accent-insensitive, root-form matches ──
+    # Each theme has alternatives covering common conjugations + variants.
+    themes: dict[str, list[str]] = {
+        "Prix / coût": ["prix", "cher", "cout", "tarif", "trop cher"],
+        "Refus / objection": ["refus", "rejet", "pas interess", "non honor"],
+        "Intérêt / engagement": ["interess", "favorable", "d'accord", "ok pour", "promis", "promet"],
+        "Stock / rupture": ["rupture", "manque", "epuise", "pas dispo", "n'a pas trouv"],
+        "Commande / bon de commande": ["commande", "command", "bon de"],
+        "Prescription / ordonnance": ["prescri", "ordonnance", "honor", "redig", "redact"],
+        "Patients (besoins, retours)": ["patient", "enfant", "examen", "stress", "anxi", "concentr"],
+        "Échantillons / boîtes": ["echantillon", "boite", "boîte"],
+        "Suivi / rappel": ["suivi", "rappel", "passer", "revenir", "reviendr"],
+        "Conseil / suggestion": ["conseil", "suggere", "suggest", "propos"],
+    }
 
-    top_discussed = (
-        c.groupby("doctor_name").size().reset_index(name="comments").sort_values("comments", ascending=False).head(10)
-    ).rename(columns={"doctor_name": "Médecin/Pharmacien", "comments": "Commentaires"})
+    def matches(text_norm: str, patterns: list[str]) -> bool:
+        return any(p in text_norm for p in patterns)
 
-    mentions_md = (
-        "_Aucun commentaire contenant ces mots-clés._"
-        if mentions.empty
-        else "\n".join(
-            f"- _{r['doctor_name']}_ — {r['comment_author']} ({r['created_at'].strftime('%d %b')}): "
-            f"« {r['content'][:140]}{'…' if len(r['content']) > 140 else ''} »"
-            for _, r in mentions.head(10).iterrows()
-        )
+    theme_counts: dict[str, int] = {}
+    theme_examples: dict[str, list[pd.Series]] = {}
+    for theme, patterns in themes.items():
+        mask = c["norm"].apply(lambda t: matches(t, patterns))
+        hits = c[mask]
+        theme_counts[theme] = int(len(hits))
+        theme_examples[theme] = list(hits.sort_values("created_at", ascending=False).head(3).iterrows())
+
+    def trim(text: str, n: int = 160) -> str:
+        text = text.strip().replace("\n", " ")
+        return text if len(text) <= n else text[:n] + "…"
+
+    # Themes ordered by hit count (most prevalent first)
+    sorted_themes = sorted(theme_counts.items(), key=lambda x: -x[1])
+    theme_lines = []
+    theme_lines.append("| Thème | Occurrences |")
+    theme_lines.append("|---|---:|")
+    for theme, count in sorted_themes:
+        theme_lines.append(f"| {theme} | {count} |")
+
+    # Example snippets for the top 5 themes that have hits
+    detail_blocks: list[str] = []
+    for theme, count in sorted_themes:
+        if count == 0:
+            continue
+        examples = theme_examples[theme]
+        if not examples:
+            continue
+        block = [f"#### {theme} ({count})"]
+        for _, r in examples:
+            who = r["comment_author"] or "Anonyme"
+            doc = r["doctor_name"] or "(visite supprimée)"
+            date = r["created_at"].strftime("%d %b") if pd.notna(r["created_at"]) else "—"
+            block.append(f"- _{doc}_ — **{who}** ({date}) :")
+            block.append(f"  > {trim(r['content'])}")
+        detail_blocks.append("\n".join(block))
+
+    detail_md = "\n\n".join(detail_blocks) if detail_blocks else "_Aucun thème reconnu dans les commentaires._"
+
+    # ── Comment vs reply split ────────────────────────────────────────
+    comment_n = int((c["comment_type"] == "comment").sum())
+    reply_n = int((c["comment_type"] == "reply").sum())
+    image_n = int(c["has_image"].sum()) if "has_image" in c.columns else 0
+    avg_len = int(c["content"].str.len().mean())
+
+    # ── Author leaderboard ────────────────────────────────────────────
+    by_author = (
+        c.groupby("comment_author").size().reset_index(name="Commentaires")
+        .sort_values("Commentaires", ascending=False)
+        .rename(columns={"comment_author": "Auteur"})
     )
 
-    kw_lines = "\n".join(f"- **{kw}** : {count}" for kw, count in by_kw.items())
+    # ── Most-discussed doctors (visits with the most comments) ────────
+    top_discussed = (
+        c.groupby(["doctor_name"]).size().reset_index(name="Commentaires")
+        .sort_values("Commentaires", ascending=False)
+        .head(10)
+        .rename(columns={"doctor_name": "Médecin/Pharmacien"})
+    )
+
+    # ── Conversation threads — visits with the longest back-and-forth ──
+    by_visit = c.groupby("visit_id").size().sort_values(ascending=False).head(5)
+    thread_blocks: list[str] = []
+    for vid, n in by_visit.items():
+        if n < 2:
+            break
+        thread_rows = c[c["visit_id"] == vid].sort_values("created_at")
+        head_doc = thread_rows.iloc[0]["doctor_name"] or "(visite supprimée)"
+        head = f"#### Conversation — {head_doc} ({n} messages)"
+        lines = [head]
+        for _, r in thread_rows.iterrows():
+            arrow = "  ↳ " if r["comment_type"] == "reply" else "- "
+            date = r["created_at"].strftime("%d %b") if pd.notna(r["created_at"]) else "—"
+            text = trim(r["content"], 200) if r["content"] else "_(image jointe)_"
+            lines.append(f"{arrow}**{r['comment_author'] or '?'}** ({date}): {text}")
+        thread_blocks.append("\n".join(lines))
+    threads_md = "\n\n".join(thread_blocks) if thread_blocks else "_Aucune conversation à plusieurs messages._"
 
     return f"""## 6. Voix du terrain (commentaires)
 
-**{len(c)} commentaires au total.** Occurrences par mot-clé :
-{kw_lines}
+**{len(c)} commentaires** au total : {comment_n} commentaires racine + {reply_n} réponses. Longueur moyenne : {avg_len} caractères. {image_n} avec image jointe.
 
-### Top 10 médecins/pharmaciens les plus commentés
+### 6.1 Thèmes détectés (recherche insensible aux accents et conjugaisons)
+{chr(10).join(theme_lines)}
+
+### 6.2 Exemples par thème
+{detail_md}
+
+### 6.3 Top 10 médecins/pharmaciens les plus commentés
 {md_table(top_discussed)}
 
-### Commentaires contenant des mots-clés (10 plus récents)
-{mentions_md}
+### 6.4 Auteurs des commentaires
+{md_table(by_author)}
+
+### 6.5 Conversations actives (visites avec plusieurs messages)
+{threads_md}
 """
 
 
