@@ -9,6 +9,7 @@ import {
   Users,
   CalendarCheck,
   Package,
+  Sparkles,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,7 @@ const allNavItems = [
   { href: "/medecins", label: "Médecins", icon: Stethoscope, roles: ["delegue", "superviseur"] },
   { href: "/planification", label: "Planification", icon: CalendarCheck, roles: ["delegue"] },
   { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard, roles: ["superviseur"] },
+  { href: "/assistant", label: "Assistant IA", icon: Sparkles, roles: ["superviseur"] },
   { href: "/delegues", label: "Délégués", icon: Users, roles: ["superviseur"] },
   { href: "/produits", label: "Produits", icon: Package, roles: ["superviseur"] },
 ];
