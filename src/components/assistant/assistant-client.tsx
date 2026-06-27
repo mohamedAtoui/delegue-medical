@@ -4,7 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Pencil, Plus, Send, Sparkles, Trash2 } from "lucide-react";
+import { Loader2, Menu, Pencil, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ChatMessage, type ChatMessageData } from "./chat-message";
@@ -46,6 +46,8 @@ export function AssistantClient({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [initialMessages, setInitialMessages] = useState<ReturnType<typeof toUIMessage>[]>([]);
   const [booting, setBooting] = useState(true);
+  // Mobile: the conversation list is a slide-over drawer (ChatGPT/Claude style).
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Pick the newest conversation on mount, or create one if there are none.
   useEffect(() => {
@@ -145,55 +147,95 @@ export function AssistantClient({
     }
   }
 
-  return (
-    <div className="flex h-[calc(100dvh-11rem)] gap-4 md:h-[calc(100vh-8rem)]">
-      {/* Conversations sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col rounded-xl border border-border bg-card md:flex">
-        <div className="space-y-3 p-3">
-          <div className="flex items-center gap-2 px-1">
+  // Shared conversation panel — rendered in the desktop sidebar and the mobile
+  // drawer. Selecting / creating also closes the drawer (no-op on desktop).
+  const conversationsPanel = (
+    <>
+      <div className="space-y-3 p-3">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold text-foreground">Assistant IA</span>
           </div>
-          <Button onClick={handleNewChat} className="w-full cursor-pointer" size="sm">
-            <Plus className="mr-2 h-4 w-4" />
-            Nouvelle conversation
-          </Button>
+          <button
+            onClick={() => setDrawerOpen(false)}
+            className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-muted md:hidden"
+            aria-label="Fermer"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
-        <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
-          {conversations.map((c) => (
-            <div
-              key={c.id}
-              className={`group flex items-center gap-1 rounded-lg px-2 py-2 text-sm transition-colors ${
-                c.id === activeId
-                  ? "bg-sidebar-accent text-sidebar-primary"
-                  : "hover:bg-sidebar-accent/50"
-              }`}
+        <Button
+          onClick={() => {
+            handleNewChat();
+            setDrawerOpen(false);
+          }}
+          className="w-full cursor-pointer"
+          size="sm"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Nouvelle conversation
+        </Button>
+      </div>
+      <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
+        {conversations.map((c) => (
+          <div
+            key={c.id}
+            className={`group flex items-center gap-1 rounded-lg px-2 py-2 text-sm transition-colors ${
+              c.id === activeId
+                ? "bg-sidebar-accent text-sidebar-primary"
+                : "hover:bg-sidebar-accent/50"
+            }`}
+          >
+            <button
+              onClick={() => {
+                selectConversation(c.id);
+                setDrawerOpen(false);
+              }}
+              className="flex-1 cursor-pointer truncate text-left"
+              title={c.title}
             >
-              <button
-                onClick={() => selectConversation(c.id)}
-                className="flex-1 cursor-pointer truncate text-left"
-                title={c.title}
-              >
-                {c.title}
-              </button>
-              <button
-                onClick={() => renameConversation(c.id)}
-                className="cursor-pointer opacity-0 group-hover:opacity-100"
-                aria-label="Renommer"
-              >
-                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-              <button
-                onClick={() => deleteConversation(c.id)}
-                className="cursor-pointer opacity-0 group-hover:opacity-100"
-                aria-label="Supprimer"
-              >
-                <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-            </div>
-          ))}
-        </div>
+              {c.title}
+            </button>
+            <button
+              onClick={() => renameConversation(c.id)}
+              className="cursor-pointer p-1 opacity-100 md:opacity-0 md:group-hover:opacity-100"
+              aria-label="Renommer"
+            >
+              <Pencil className="h-4 w-4 text-muted-foreground md:h-3.5 md:w-3.5" />
+            </button>
+            <button
+              onClick={() => deleteConversation(c.id)}
+              className="cursor-pointer p-1 opacity-100 md:opacity-0 md:group-hover:opacity-100"
+              aria-label="Supprimer"
+            >
+              <Trash2 className="h-4 w-4 text-muted-foreground md:h-3.5 md:w-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex h-[calc(100dvh-11rem)] gap-4 md:h-[calc(100vh-8rem)]">
+      {/* Desktop: persistent sidebar */}
+      <aside className="hidden w-64 shrink-0 flex-col rounded-xl border border-border bg-card md:flex">
+        {conversationsPanel}
       </aside>
+
+      {/* Mobile: slide-over drawer */}
+      {drawerOpen && (
+        <div className="fixed inset-0 z-[60] md:hidden">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setDrawerOpen(false)}
+          />
+          <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] flex-col bg-card shadow-xl">
+            {conversationsPanel}
+          </aside>
+        </div>
+      )}
 
       {/* Active chat thread (remounted per conversation) */}
       <main className="flex min-w-0 flex-1 flex-col rounded-xl border border-border bg-card">
@@ -208,6 +250,7 @@ export function AssistantClient({
             initialMessages={initialMessages}
             onFinished={refreshConversations}
             onNewChat={handleNewChat}
+            onOpenDrawer={() => setDrawerOpen(true)}
           />
         )}
       </main>
@@ -220,11 +263,13 @@ function ChatThread({
   initialMessages,
   onFinished,
   onNewChat,
+  onOpenDrawer,
 }: {
   conversationId: string;
   initialMessages: ReturnType<typeof toUIMessage>[];
   onFinished: () => void;
   onNewChat: () => void;
+  onOpenDrawer: () => void;
 }) {
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -262,8 +307,15 @@ function ChatThread({
 
   return (
     <>
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={onOpenDrawer}
+            className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-muted md:hidden"
+            aria-label="Conversations"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
           <Sparkles className="h-5 w-5 text-primary" />
           <h2 className="font-semibold text-foreground">Assistant IA</h2>
         </div>
