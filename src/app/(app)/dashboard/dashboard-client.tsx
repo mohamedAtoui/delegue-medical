@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { StatsCards } from "@/components/dashboard/stats-cards";
 import { Charts } from "@/components/dashboard/charts";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
-import { AISummaryPanel } from "@/components/dashboard/ai-summary-panel";
 import { Button } from "@/components/ui/button";
 import { MedicalLoader } from "@/components/ui/medical-loader";
 import {
@@ -102,11 +101,8 @@ export function DashboardClient({
         </div>
       </div>
 
-      {/* Bottom section: Activity + AI */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <ActivityFeed initialVisits={initialVisits} />
-        <AISummaryPanel />
-      </div>
+      {/* Recent activity. The AI assistant now lives on its own page (/assistant). */}
+      <ActivityFeed initialVisits={initialVisits} />
     </div>
   );
 }
