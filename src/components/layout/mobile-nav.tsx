@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ClipboardList, Stethoscope, LayoutDashboard, CalendarCheck, User, Users, Package } from "lucide-react";
+import { ClipboardList, Stethoscope, LayoutDashboard, CalendarCheck, Sparkles, User, Users, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
 
@@ -12,6 +12,7 @@ const allNavItems = [
   { href: "/delegues", label: "Délégués", icon: Users, roles: ["superviseur"] },
   { href: "/produits", label: "Produits", icon: Package, roles: ["superviseur"] },
   { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard, roles: ["superviseur"] },
+  { href: "/assistant", label: "Assistant", icon: Sparkles, roles: ["superviseur"] },
   { href: "/profil", label: "Profil", icon: User, roles: ["delegue", "superviseur"] },
 ];
 

@@ -146,7 +146,7 @@ export function AssistantClient({
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-4">
+    <div className="flex h-[calc(100dvh-11rem)] gap-4 md:h-[calc(100vh-8rem)]">
       {/* Conversations sidebar */}
       <aside className="hidden w-64 shrink-0 flex-col rounded-xl border border-border bg-card md:flex">
         <div className="space-y-3 p-3">
