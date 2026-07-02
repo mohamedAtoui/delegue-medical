@@ -62,11 +62,12 @@ export async function POST(request: NextRequest) {
 
   const result = streamText({
     model: getModel(),
-    system: getSystemPrompt(),
+    system: await getSystemPrompt(),
     messages: await convertToModelMessages(messages),
     tools,
-    // Let the model loop: query, read rows, refine, maybe chart, then answer.
-    stopWhen: stepCountIs(6),
+    // Let the model loop: query, read rows, recover from SQL errors, refine,
+    // maybe chart, then answer. Higher cap leaves room for self-correction.
+    stopWhen: stepCountIs(12),
   });
 
   return result.toUIMessageStreamResponse({

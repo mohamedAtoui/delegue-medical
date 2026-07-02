@@ -1,24 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Stethoscope,
   Pill,
+  Truck,
   MapPin,
   ChevronDown,
   ChevronUp,
   Clock,
   MessageSquare,
-  History,
   Loader2,
 } from "lucide-react";
 import { VisitEntry } from "@/components/visits/visit-entry";
+import { EngagementStars } from "@/components/shared/engagement-stars";
 import type { VisitWithDetails, DoctorType, Potentiel } from "@/types";
 
 // Re-export for backward compat
@@ -42,8 +42,8 @@ interface DoctorVisitGroupProps {
   /** Auto-expand if this id matches one of our visits */
   highlightVisitId?: string;
   /**
-   * Skip the "Voir l'historique complet" footer button. Useful when the
-   * parent context already shows the full history (e.g. doctor profile page).
+   * Skip auto-fetching the full doctor history on expand. Use when the
+   * parent already passes in the complete visit list (e.g. doctor profile).
    */
   hideHistoryToggle?: boolean;
 }
@@ -71,54 +71,74 @@ export function DoctorVisitGroup({
     !!(highlightVisitId && visits.some((v) => v.id === highlightVisitId))
   );
 
-  // Full doctor history (loaded on demand)
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyVisits, setHistoryVisits] = useState<VisitWithDetails[] | null>(null);
-  const [historyLoadedOnce, setHistoryLoadedOnce] = useState(false);
+  // Full doctor history — fetched automatically the first time we expand.
+  const [allVisits, setAllVisits] = useState<VisitWithDetails[] | null>(null);
+  const [loadingAll, setLoadingAll] = useState(false);
+  const [localDeletedIds, setLocalDeletedIds] = useState<Set<string>>(new Set());
+
+  // Auto-fetch full history when expanded, unless parent disables it
+  useEffect(() => {
+    if (!expanded || hideHistoryToggle || !doctorId || allVisits !== null) return;
+    let cancelled = false;
+    setLoadingAll(true);
+    fetch(`/api/visits?doctor_id=${doctorId}&all=true&limit=200`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        setAllVisits(Array.isArray(data.data) ? data.data : []);
+      })
+      .catch(() => {
+        if (!cancelled) setAllVisits([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingAll(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [expanded, hideHistoryToggle, doctorId, allVisits]);
 
   const lastVisit = visits[0];
   const totalComments = visits.reduce(
     (sum, v) => sum + (v.comment_count || 0),
     0
   );
+  // True total visits for this doctor (server-computed), independent of the
+  // filtered/paginated page. Falls back to the page length if not provided.
+  const doctorVisitCount = visits[0]?.doctor_visit_count ?? visits.length;
+  const doctorEngagement = visits[0]?.doctor?.engagement ?? null;
 
-  const isPharm = doctorType
-    ? doctorType === "pharmacien"
-    : visits[0]?.doctor?.doctor_type === "pharmacien" ||
-      visits[0]?.visit_type === "pharmacien";
-  const Icon = isPharm ? Pill : Stethoscope;
-  const iconBg = isPharm ? "bg-accent/10" : "bg-primary/10";
-  const iconColor = isPharm ? "text-accent" : "text-primary";
+  const effectiveType =
+    doctorType ?? visits[0]?.doctor?.doctor_type ?? visits[0]?.visit_type;
+  const isGross = effectiveType === "grossiste";
+  const isPrescriber = effectiveType === "medecin";
+  const Icon = isGross ? Truck : isPrescriber ? Stethoscope : Pill;
+  const iconBg = isPrescriber ? "bg-primary/10" : "bg-accent/10";
+  const iconColor = isPrescriber ? "text-primary" : "text-accent";
 
-  // Visit IDs already shown in the current group (to dedupe history results)
-  const visibleIds = new Set(visits.map((v) => v.id));
+  // Pick the list to display:
+  //   - if we've fetched the full history, use that
+  //   - otherwise fall back to the filtered visits passed in by the parent
+  const rawList = (allVisits ?? visits).filter((v) => !localDeletedIds.has(v.id));
 
-  // Visits in the history fetch that AREN'T already shown above
-  const extraHistoryVisits = (historyVisits ?? []).filter(
-    (v) => !visibleIds.has(v.id)
+  // Number each visit chronologically (1 = oldest, N = most recent)
+  const ascending = [...rawList].sort(
+    (a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+  const visitNumber = new Map<string, number>();
+  ascending.forEach((v, i) => visitNumber.set(v.id, i + 1));
+
+  // Display in reverse-chronological order (most recent first)
+  const displayList = [...rawList].sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 
-  const loadHistory = async () => {
-    if (!doctorId || historyLoadedOnce) {
-      setHistoryOpen(!historyOpen);
-      return;
-    }
-    setHistoryLoading(true);
-    setHistoryOpen(true);
-    try {
-      const res = await fetch(
-        `/api/visits?doctor_id=${doctorId}&all=true&limit=100`
-      );
-      const data = await res.json();
-      setHistoryVisits(Array.isArray(data.data) ? data.data : []);
-      setHistoryLoadedOnce(true);
-    } catch {
-      setHistoryVisits([]);
-      setHistoryLoadedOnce(true);
-    } finally {
-      setHistoryLoading(false);
-    }
+  // Wrap parent's onDelete so this component keeps its own list in sync too
+  const handleDelete = (visitId: string) => {
+    setLocalDeletedIds((prev) => new Set(prev).add(visitId));
+    onVisitDelete?.(visitId);
   };
 
   return (
@@ -153,6 +173,13 @@ export function DoctorVisitGroup({
                     {specialty}
                   </Badge>
                 )}
+                {doctorEngagement != null && doctorEngagement > 0 && (
+                  <EngagementStars
+                    value={doctorEngagement}
+                    size="sm"
+                    showValue
+                  />
+                )}
               </div>
               <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">
                 <span className="flex items-center gap-1 min-w-0">
@@ -165,12 +192,15 @@ export function DoctorVisitGroup({
                 </span>
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  {visits.length} visite{visits.length !== 1 ? "s" : ""}
+                  {doctorVisitCount} visite{doctorVisitCount !== 1 ? "s" : ""}
                 </span>
                 {totalComments > 0 && (
-                  <span className="flex items-center gap-1">
+                  <span
+                    className="flex items-center gap-1"
+                    title={`${totalComments} commentaire${totalComments !== 1 ? "s" : ""}`}
+                  >
                     <MessageSquare className="h-3 w-3" />
-                    {totalComments}
+                    {totalComments} comm.
                   </span>
                 )}
                 <span className="flex items-center gap-1">
@@ -205,81 +235,56 @@ export function DoctorVisitGroup({
           </div>
         </div>
 
-        {/* Expanded: unified VisitEntry for each visit */}
+        {/* Expanded: every visit (filtered + auto-fetched history), numbered. */}
         {expanded && (
           <div
             className="mt-4 pt-3 border-t border-border/50 space-y-2"
             onClick={(e) => e.stopPropagation()}
           >
-            {visits.map((visit) => (
-              <VisitEntry
-                key={visit.id}
-                visit={visit}
-                showUser={showUser}
-                highlightUserId={highlightUserId}
-                onClick={onVisitClick}
-                userRole={userRole}
-                onDelete={onVisitDelete}
-                highlightVisitId={highlightVisitId}
-              />
-            ))}
-
-            {/* History toggle — only when we have a doctorId AND the parent
-                didn't disable it (e.g. doctor profile page already shows
-                everything). */}
+            {/* History summary header */}
             {!hideHistoryToggle && doctorId && (
-              <div className="pt-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    loadHistory();
-                  }}
-                  disabled={historyLoading}
-                  className="w-full justify-between cursor-pointer text-xs h-8 border-dashed"
-                >
-                  <span className="flex items-center gap-2">
-                    {historyLoading ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <History className="h-3 w-3" />
-                    )}
-                    {historyLoadedOnce
-                      ? extraHistoryVisits.length > 0
-                        ? `${extraHistoryVisits.length} visite${
-                            extraHistoryVisits.length > 1 ? "s" : ""
-                          } supplémentaire${extraHistoryVisits.length > 1 ? "s" : ""}`
-                        : "Aucune autre visite"
-                      : "Voir l'historique complet de ce médecin"}
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground pb-1">
+                <span className="font-semibold uppercase tracking-wide">
+                  Historique complet
+                </span>
+                {loadingAll ? (
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Chargement…
                   </span>
-                  {historyOpen ? (
-                    <ChevronUp className="h-3 w-3" />
-                  ) : (
-                    <ChevronDown className="h-3 w-3" />
-                  )}
-                </Button>
-
-                {historyOpen && historyLoadedOnce && extraHistoryVisits.length > 0 && (
-                  <div className="mt-2 space-y-2 pl-3 border-l-2 border-primary/20">
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground/80 font-semibold">
-                      Visites précédentes
-                    </p>
-                    {extraHistoryVisits.map((visit) => (
-                      <VisitEntry
-                        key={visit.id}
-                        visit={visit}
-                        showUser={showUser}
-                        highlightUserId={highlightUserId}
-                        userRole={userRole}
-                        onDelete={onVisitDelete}
-                      />
-                    ))}
-                  </div>
+                ) : (
+                  <span>
+                    {displayList.length} visite{displayList.length > 1 ? "s" : ""} au total
+                  </span>
                 )}
               </div>
             )}
+
+            {/* Visits — newest first, with chronological number */}
+            {displayList.map((visit) => {
+              const num = visitNumber.get(visit.id);
+              return (
+                <div key={visit.id} className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center justify-center min-w-[1.5rem] h-5 px-1.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold">
+                      #{num}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">
+                      Visite #{num} sur {displayList.length}
+                    </span>
+                  </div>
+                  <VisitEntry
+                    visit={visit}
+                    showUser={showUser}
+                    highlightUserId={highlightUserId}
+                    onClick={onVisitClick}
+                    userRole={userRole}
+                    onDelete={handleDelete}
+                    highlightVisitId={highlightVisitId}
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
       </CardContent>

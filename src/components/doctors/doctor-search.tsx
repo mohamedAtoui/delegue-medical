@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Plus, Stethoscope, Pill } from "lucide-react";
+import { Search, Plus, Stethoscope, Pill, Truck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { Doctor, DoctorType } from "@/types";
@@ -48,20 +48,32 @@ export function DoctorSearch({
     return () => clearTimeout(timeout);
   }, [search, type]);
 
-  const label = type === "pharmacien" ? "pharmacien" : "médecin";
-  const labelCap = type === "pharmacien" ? "Pharmacien" : "Médecin";
+  const label =
+    type === "pharmacien"
+      ? "pharmacien"
+      : type === "grossiste"
+      ? "grossiste"
+      : "médecin";
+  const labelCap =
+    type === "pharmacien"
+      ? "Pharmacien"
+      : type === "grossiste"
+      ? "Grossiste"
+      : "Médecin";
 
   if (selectedDoctor) {
-    const isPharm = selectedDoctor.doctor_type === "pharmacien";
-    const Icon = isPharm ? Pill : Stethoscope;
+    const dt = selectedDoctor.doctor_type;
+    const Icon =
+      dt === "grossiste" ? Truck : dt === "pharmacien" ? Pill : Stethoscope;
+    const accent = dt !== "medecin";
     return (
       <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2">
-        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${isPharm ? "bg-accent/10" : "bg-primary/10"}`}>
-          <Icon className={`h-4 w-4 ${isPharm ? "text-accent" : "text-primary"}`} />
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${accent ? "bg-accent/10" : "bg-primary/10"}`}>
+          <Icon className={`h-4 w-4 ${accent ? "text-accent" : "text-primary"}`} />
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-medium text-sm truncate">
-            {isPharm ? "" : "Dr. "}
+            {dt === "medecin" ? "Dr. " : ""}
             {selectedDoctor.last_name} {selectedDoctor.first_name}
           </p>
           <p className="text-xs text-muted-foreground truncate">
@@ -106,8 +118,14 @@ export function DoctorSearch({
           ) : results.length > 0 ? (
             <div className="max-h-60 overflow-y-auto">
               {results.map((doctor) => {
-                const isPharm = doctor.doctor_type === "pharmacien";
-                const Icon = isPharm ? Pill : Stethoscope;
+                const dt = doctor.doctor_type;
+                const Icon =
+                  dt === "grossiste"
+                    ? Truck
+                    : dt === "pharmacien"
+                    ? Pill
+                    : Stethoscope;
+                const accent = dt !== "medecin";
                 return (
                   <button
                     key={doctor.id}
@@ -119,10 +137,10 @@ export function DoctorSearch({
                       setSearch("");
                     }}
                   >
-                    <Icon className={`h-4 w-4 shrink-0 ${isPharm ? "text-accent" : "text-primary"}`} />
+                    <Icon className={`h-4 w-4 shrink-0 ${accent ? "text-accent" : "text-primary"}`} />
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-sm truncate">
-                        {isPharm ? "" : "Dr. "}
+                        {dt === "medecin" ? "Dr. " : ""}
                         {doctor.last_name} {doctor.first_name}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">

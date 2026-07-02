@@ -1,7 +1,10 @@
 export type UserRole = "delegue" | "superviseur";
-export type DoctorType = "medecin" | "pharmacien";
-export type VisitType = "medecin" | "pharmacien";
+export type DoctorType = "medecin" | "pharmacien" | "grossiste";
+export type VisitType = "medecin" | "pharmacien" | "grossiste";
 export type Potentiel = "A" | "B" | "C";
+
+/** Grossiste supply category on a pharmacy. */
+export type GrossisteCategory = "pharma" | "para_pharm";
 
 export interface User {
   id: string;
@@ -132,6 +135,8 @@ export interface Visit {
   visit_type: VisitType;
   objective: string | null;
   compte_rendu: string | null;
+  /** Engagement (1–5) captured at this visit; feeds the doctor's average. */
+  engagement: number | null;
   // Legacy médecin checklist — kept for pre-migration visits; new visits
   // store answers in visit_answers instead.
   synapgen_solves: boolean | null;
@@ -157,7 +162,28 @@ export interface VisitWithDetails extends Visit {
   doctor: Doctor;
   user: User;
   comment_count?: number;
+  /** True total number of visits for this doctor (not the filtered page). */
+  doctor_visit_count?: number;
   visit_answers?: VisitAnswer[];
+  visit_grossistes?: VisitGrossiste[];
+}
+
+/** A grossiste linked to a pharmacy (directory-level, current state). */
+export interface DoctorGrossiste {
+  doctor_id: string;
+  grossiste_id: string;
+  category: GrossisteCategory;
+  created_at?: string;
+  grossiste?: Pick<Doctor, "id" | "last_name" | "wilaya">;
+}
+
+/** A grossiste recorded at a specific pharmacy visit. */
+export interface VisitGrossiste {
+  visit_id: string;
+  grossiste_id: string;
+  category: GrossisteCategory;
+  created_at?: string;
+  grossiste?: Pick<Doctor, "id" | "last_name" | "wilaya">;
 }
 
 export interface VisitComment {
