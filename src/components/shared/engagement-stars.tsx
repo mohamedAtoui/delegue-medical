@@ -28,7 +28,9 @@ export function EngagementStars({
   showValue = false,
   className,
 }: EngagementStarsProps) {
-  const v = value ?? 0;
+  // Postgres `numeric` (doctors.engagement average) comes back from PostgREST
+  // as a string — coerce so comparisons and toFixed() never break during SSR.
+  const v = Number(value ?? 0) || 0;
   const interactive = !!onChange;
   const threshold = interactive ? v : Math.round(v);
   const starClass = SIZES[size];
