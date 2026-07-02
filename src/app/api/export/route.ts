@@ -32,7 +32,7 @@ export async function GET() {
       supabase
         .from("visits")
         .select(
-          "*, doctor:doctors(first_name, last_name, wilaya, doctor_type), user:users(first_name, last_name, email)"
+          "*, doctor:doctors!visits_doctor_id_fkey(first_name, last_name, wilaya, doctor_type), user:users(first_name, last_name, email)"
         )
         .order("created_at", { ascending: false }),
       supabase.from("users").select("*").order("last_name"),
@@ -42,7 +42,7 @@ export async function GET() {
       supabase
         .from("visit_comments")
         .select(
-          "*, user:users(first_name, last_name), visit:visits(created_at, doctor:doctors(first_name, last_name))"
+          "*, user:users(first_name, last_name), visit:visits(created_at, doctor:doctors!visits_doctor_id_fkey(first_name, last_name))"
         )
         .order("created_at", { ascending: false }),
     ]);
