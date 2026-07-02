@@ -72,6 +72,7 @@ All migrations are **idempotent** — re-running on an existing DB is safe.
 019_visit_engagement.sql         ← per-visit engagement + doctor average (trigger)
 020_grossistes.sql               ← grossiste contacts + pharmacy↔grossiste links
 021_reporting_views.sql          ← additive grossiste views for the Assistant IA
+022_grossistes_cleanup.sql       ← reset grossiste directory to canonical list + relink
 ```
 
 > **Note:** there's a numbering gap (002–007) — those changes were applied ad-hoc during early development and are consolidated into `001_initial_schema.sql`.
