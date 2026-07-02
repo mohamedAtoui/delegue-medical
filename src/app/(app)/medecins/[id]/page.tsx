@@ -8,24 +8,33 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DoctorForm } from "@/components/doctors/doctor-form";
 import { DoctorVisitGroup } from "@/components/visits/visit-card";
+import { EngagementStars } from "@/components/shared/engagement-stars";
 import {
   Stethoscope,
   Pill,
   MapPin,
   Phone,
-  Star,
   Pencil,
   ArrowLeft,
   Navigation,
   Mail,
   Truck,
 } from "lucide-react";
-import type { Doctor, UserRole, VisitWithDetails } from "@/types";
+import type {
+  Doctor,
+  DoctorGrossiste,
+  UserRole,
+  VisitWithDetails,
+} from "@/types";
+
+type DoctorWithGrossistes = Doctor & {
+  doctor_grossistes?: DoctorGrossiste[];
+};
 
 export default function DoctorDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const [doctor, setDoctor] = useState<Doctor | null>(null);
+  const [doctor, setDoctor] = useState<DoctorWithGrossistes | null>(null);
   const [visits, setVisits] = useState<VisitWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEdit, setShowEdit] = useState(false);
@@ -70,9 +79,17 @@ export default function DoctorDetailPage() {
   }
 
   const isPharmacien = doctor.doctor_type === "pharmacien";
-  const Icon = isPharmacien ? Pill : Stethoscope;
-  const iconBg = isPharmacien ? "bg-accent/10" : "bg-primary/10";
-  const iconColor = isPharmacien ? "text-accent" : "text-primary";
+  const isGrossiste = doctor.doctor_type === "grossiste";
+  const isPrescriber = doctor.doctor_type === "medecin";
+  const Icon = isGrossiste ? Truck : isPharmacien ? Pill : Stethoscope;
+  const iconBg = isPrescriber ? "bg-primary/10" : "bg-accent/10";
+  const iconColor = isPrescriber ? "text-primary" : "text-accent";
+  const typeLabel = isGrossiste
+    ? "Grossiste"
+    : isPharmacien
+    ? "Pharmacien"
+    : "Médecin";
+  const grossisteLinks = doctor.doctor_grossistes ?? [];
 
   return (
     <div className="space-y-6">
@@ -91,14 +108,12 @@ export default function DoctorDetailPage() {
               </div>
               <div>
                 <h1 className="text-xl font-bold">
-                  {isPharmacien ? "" : "Dr. "}
+                  {isPrescriber ? "Dr. " : ""}
                   {doctor.last_name} {doctor.first_name}
                 </h1>
                 <div className="flex flex-wrap gap-2 mt-2">
-                  <Badge variant="outline">
-                    {isPharmacien ? "Pharmacien" : "Médecin"}
-                  </Badge>
-                  {doctor.specialty && !isPharmacien && (
+                  <Badge variant="outline">{typeLabel}</Badge>
+                  {doctor.specialty && isPrescriber && (
                     <Badge variant="secondary">{doctor.specialty}</Badge>
                   )}
                   {doctor.potentiel && (
@@ -152,38 +167,51 @@ export default function DoctorDetailPage() {
                       Voir sur Google Maps
                     </a>
                   )}
-                  {isPharmacien && (doctor.grossiste_pharma || doctor.grossiste_para_pharm) && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Truck className="h-4 w-4" />
-                      {doctor.grossiste_pharma && (
-                        <Badge variant="outline" className="text-xs">
-                          Pharma : {doctor.grossiste_pharma}
-                        </Badge>
-                      )}
-                      {doctor.grossiste_para_pharm && (
-                        <Badge variant="outline" className="text-xs">
-                          Para-pharm : {doctor.grossiste_para_pharm}
-                        </Badge>
-                      )}
-                    </div>
-                  )}
-                  {doctor.engagement != null && doctor.engagement > 0 && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm">Engagement :</span>
-                      <span className="flex items-center gap-0.5">
-                        {[1, 2, 3, 4, 5].map((s) => (
-                          <Star
-                            key={s}
-                            className={`h-4 w-4 ${
-                              s <= doctor.engagement!
-                                ? "fill-yellow-400 text-yellow-400"
-                                : "text-muted-foreground/20"
-                            }`}
-                          />
-                        ))}
-                      </span>
-                    </div>
-                  )}
+                  {isPharmacien &&
+                    (grossisteLinks.length > 0 ||
+                      doctor.grossiste_pharma ||
+                      doctor.grossiste_para_pharm) && (
+                      <div className="flex items-start gap-2 flex-wrap">
+                        <Truck className="h-4 w-4 mt-0.5" />
+                        <div className="flex flex-wrap gap-1.5">
+                          {grossisteLinks.length > 0
+                            ? grossisteLinks.map((g) => (
+                                <Badge
+                                  key={`${g.grossiste_id}-${g.category}`}
+                                  variant="outline"
+                                  className="text-xs"
+                                >
+                                  {g.category === "pharma"
+                                    ? "Pharma"
+                                    : "Para-pharm"}{" "}
+                                  : {g.grossiste?.last_name ?? "Grossiste"}
+                                </Badge>
+                              ))
+                            : /* Legacy free-text fallback */ (
+                                <>
+                                  {doctor.grossiste_pharma && (
+                                    <Badge variant="outline" className="text-xs">
+                                      Pharma : {doctor.grossiste_pharma}
+                                    </Badge>
+                                  )}
+                                  {doctor.grossiste_para_pharm && (
+                                    <Badge variant="outline" className="text-xs">
+                                      Para-pharm : {doctor.grossiste_para_pharm}
+                                    </Badge>
+                                  )}
+                                </>
+                              )}
+                        </div>
+                      </div>
+                    )}
+                  {!isGrossiste &&
+                    doctor.engagement != null &&
+                    doctor.engagement > 0 && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">Engagement :</span>
+                        <EngagementStars value={doctor.engagement} showValue />
+                      </div>
+                    )}
                 </div>
               </div>
             </div>
@@ -199,7 +227,7 @@ export default function DoctorDetailPage() {
       {visits.length > 0 ? (
         <DoctorVisitGroup
           doctorId={doctor.id}
-          doctorName={`${isPharmacien ? "" : "Dr. "}${doctor.last_name} ${doctor.first_name}`.trim()}
+          doctorName={`${isPrescriber ? "Dr. " : ""}${doctor.last_name} ${doctor.first_name}`.trim()}
           specialty={doctor.specialty || null}
           wilaya={doctor.wilaya || ""}
           commune={doctor.commune || null}
@@ -225,7 +253,12 @@ export default function DoctorDetailPage() {
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              Modifier {isPharmacien ? "le pharmacien" : "le médecin"}
+              Modifier{" "}
+              {isGrossiste
+                ? "le grossiste"
+                : isPharmacien
+                ? "le pharmacien"
+                : "le médecin"}
             </DialogTitle>
           </DialogHeader>
           <DoctorForm

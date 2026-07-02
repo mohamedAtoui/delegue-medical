@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/utils/supabase/server";
 import { getOrCreateUser } from "@/lib/clerk/sync-user";
 import { fetchDoctors } from "@/lib/queries/doctors";
+import { cleanGrossisteLinks } from "@/lib/grossistes";
 
 export async function GET(request: NextRequest) {
   const { userId } = await auth();
@@ -18,7 +19,10 @@ export async function GET(request: NextRequest) {
       search: searchParams.get("search"),
       wilaya: searchParams.get("wilaya"),
       specialty: searchParams.get("specialty"),
-      type: type === "medecin" || type === "pharmacien" ? type : null,
+      type:
+        type === "medecin" || type === "pharmacien" || type === "grossiste"
+          ? type
+          : null,
       page: parseInt(searchParams.get("page") || "1"),
       limit: parseInt(searchParams.get("limit") || "20"),
     });
@@ -53,6 +57,7 @@ export async function POST(request: NextRequest) {
     grossiste_para_pharm,
     potentiel,
     engagement,
+    grossistes,
   } = body;
 
   if (!first_name || !last_name || !wilaya) {
@@ -63,13 +68,16 @@ export async function POST(request: NextRequest) {
   }
 
   const isPharmacien = doctor_type === "pharmacien";
-  if (!isPharmacien && !specialty) {
+  const isGrossiste = doctor_type === "grossiste";
+  // Grossistes are quick-add contacts (name + wilaya). Médecins/pharmaciens
+  // keep the fuller validation.
+  if (!isPharmacien && !isGrossiste && !specialty) {
     return NextResponse.json({ error: "La spécialité est requise pour un médecin" }, { status: 400 });
   }
-  if (!address) {
+  if (!isGrossiste && !address) {
     return NextResponse.json({ error: "L'adresse est requise" }, { status: 400 });
   }
-  if (!phone_fixe) {
+  if (!isGrossiste && !phone_fixe) {
     return NextResponse.json({ error: "Le téléphone fixe est requis" }, { status: 400 });
   }
 
@@ -82,7 +90,7 @@ export async function POST(request: NextRequest) {
       first_name,
       last_name,
       doctor_type: doctor_type || "medecin",
-      specialty: isPharmacien ? null : (specialty || null),
+      specialty: isPharmacien || isGrossiste ? null : (specialty || null),
       address: address || null,
       google_maps_url: google_maps_url || null,
       wilaya,
@@ -102,6 +110,21 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Sync pharmacy → grossiste links (new model). Best-effort.
+  if (isPharmacien && data) {
+    const links = cleanGrossisteLinks(grossistes);
+    if (links.length > 0) {
+      await supabase.from("doctor_grossistes").upsert(
+        links.map((g) => ({
+          doctor_id: data.id,
+          grossiste_id: g.grossiste_id,
+          category: g.category,
+        })),
+        { onConflict: "doctor_id,grossiste_id,category" }
+      );
+    }
   }
 
   return NextResponse.json(data, { status: 201 });

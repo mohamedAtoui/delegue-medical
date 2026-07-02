@@ -29,7 +29,10 @@ export async function GET(request: NextRequest) {
       doctorId: searchParams.get("doctor_id"),
       from: searchParams.get("from"),
       to: searchParams.get("to"),
-      type: type === "medecin" || type === "pharmacien" ? type : null,
+      type:
+        type === "medecin" || type === "pharmacien" || type === "grossiste"
+          ? type
+          : null,
       wilaya: searchParams.get("wilaya"),
       search: searchParams.get("search")?.trim() || null,
       page: parseInt(searchParams.get("page") || "1"),
@@ -50,6 +53,11 @@ interface AnswerPayload {
   value_number?: number | null;
 }
 
+interface GrossistePayload {
+  grossiste_id: string;
+  category: "pharma" | "para_pharm";
+}
+
 export async function POST(request: NextRequest) {
   const { userId } = await auth();
   if (!userId) {
@@ -63,25 +71,33 @@ export async function POST(request: NextRequest) {
     visit_type,
     objective,
     compte_rendu,
+    engagement,
     answers,
+    grossistes,
   } = body as {
     doctor_id?: string;
     product_id?: string;
     visit_type?: string;
     objective?: string;
     compte_rendu?: string;
+    engagement?: number | null;
     answers?: AnswerPayload[];
+    grossistes?: GrossistePayload[];
   };
 
   if (!doctor_id) {
-    return NextResponse.json({ error: "Le médecin/pharmacien est requis" }, { status: 400 });
+    return NextResponse.json({ error: "Le contact est requis" }, { status: 400 });
   }
-  if (visit_type !== "medecin" && visit_type !== "pharmacien") {
+  if (
+    visit_type !== "medecin" &&
+    visit_type !== "pharmacien" &&
+    visit_type !== "grossiste"
+  ) {
     return NextResponse.json({ error: "Type de visite invalide" }, { status: 400 });
   }
-  // Product is required only for médecin visits. Pharmacien visits cover
-  // the whole product portfolio at once and store answers per question
-  // (each question knows its own product_id).
+  // Product is required only for médecin visits. Pharmacien/grossiste visits
+  // carry no product (pharmacien answers are per-question; grossiste is just a
+  // compte rendu).
   if (visit_type === "medecin" && !product_id) {
     return NextResponse.json({ error: "Le produit est requis" }, { status: 400 });
   }
@@ -91,8 +107,25 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  if (visit_type === "pharmacien" && !compte_rendu) {
+  if (visit_type !== "medecin" && !compte_rendu) {
     return NextResponse.json({ error: "Commentaire requis" }, { status: 400 });
+  }
+  // Engagement, when provided, must be an integer 1–5. Grossiste visits carry
+  // no engagement.
+  let engagementValue: number | null = null;
+  if (visit_type !== "grossiste" && engagement != null) {
+    if (
+      typeof engagement !== "number" ||
+      !Number.isInteger(engagement) ||
+      engagement < 1 ||
+      engagement > 5
+    ) {
+      return NextResponse.json(
+        { error: "L'engagement doit être un entier entre 1 et 5" },
+        { status: 400 }
+      );
+    }
+    engagementValue = engagement;
   }
 
   const supabase = await createClient();
@@ -110,6 +143,7 @@ export async function POST(request: NextRequest) {
       visit_type,
       objective: objective || null,
       compte_rendu: compte_rendu || null,
+      engagement: engagementValue,
       // Legacy answer columns stay NULL for new visits — answers live in
       // visit_answers.
     })
@@ -154,6 +188,39 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
+    }
+  }
+
+  // Persist grossistes recorded at this pharmacy visit and keep the pharmacy's
+  // current grossiste list (doctor_grossistes) in sync. Best-effort: a failure
+  // here doesn't invalidate the saved visit.
+  if (
+    visit_type === "pharmacien" &&
+    Array.isArray(grossistes) &&
+    grossistes.length > 0
+  ) {
+    const clean = grossistes.filter(
+      (g) =>
+        g &&
+        typeof g.grossiste_id === "string" &&
+        (g.category === "pharma" || g.category === "para_pharm")
+    );
+    if (clean.length > 0) {
+      await supabase.from("visit_grossistes").insert(
+        clean.map((g) => ({
+          visit_id: visit.id,
+          grossiste_id: g.grossiste_id,
+          category: g.category,
+        }))
+      );
+      await supabase.from("doctor_grossistes").upsert(
+        clean.map((g) => ({
+          doctor_id,
+          grossiste_id: g.grossiste_id,
+          category: g.category,
+        })),
+        { onConflict: "doctor_id,grossiste_id,category" }
+      );
     }
   }
 

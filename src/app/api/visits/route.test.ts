@@ -132,6 +132,94 @@ describe("/api/visits POST", () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it("accepts a grossiste visit without product", async () => {
+    mockAuth.mockResolvedValue({ userId: "clerk_d" });
+    mockGetOrCreateUser.mockResolvedValue(fakeDelegue);
+    mockCreateClient.mockResolvedValue(
+      makeSupabase({
+        visits: {
+          data: {
+            id: "v9",
+            doctor_id: "g1",
+            visit_type: "grossiste",
+            doctor: { id: "g1", doctor_type: "grossiste" },
+            user: fakeDelegue,
+          },
+          error: null,
+        },
+        visit_assignments: { data: [], error: null },
+      })
+    );
+    const { POST } = await import("./route");
+    const res = await POST(
+      makeRequest("http://x/api/visits", {
+        method: "POST",
+        json: {
+          doctor_id: "g1",
+          visit_type: "grossiste",
+          compte_rendu: "livraison ok",
+        },
+      }) as never
+    );
+    expect(res.status).toBe(201);
+  });
+
+  it("rejects an out-of-range engagement", async () => {
+    mockAuth.mockResolvedValue({ userId: "clerk_d" });
+    const { POST } = await import("./route");
+    const res = await POST(
+      makeRequest("http://x/api/visits", {
+        method: "POST",
+        json: {
+          doctor_id: "d1",
+          visit_type: "pharmacien",
+          compte_rendu: "ok",
+          engagement: 6,
+        },
+      }) as never
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/engagement/i);
+  });
+
+  it("persists visit_grossistes for a pharmacien visit", async () => {
+    mockAuth.mockResolvedValue({ userId: "clerk_d" });
+    mockGetOrCreateUser.mockResolvedValue(fakeDelegue);
+    const supa = makeSupabase({
+      visits: {
+        data: {
+          id: "v10",
+          doctor_id: "ph1",
+          visit_type: "pharmacien",
+          doctor: { id: "ph1", doctor_type: "pharmacien" },
+          user: fakeDelegue,
+        },
+        error: null,
+      },
+      visit_grossistes: { data: null, error: null },
+      doctor_grossistes: { data: null, error: null },
+      visit_assignments: { data: [], error: null },
+    });
+    mockCreateClient.mockResolvedValue(supa);
+    const { POST } = await import("./route");
+    const res = await POST(
+      makeRequest("http://x/api/visits", {
+        method: "POST",
+        json: {
+          doctor_id: "ph1",
+          visit_type: "pharmacien",
+          compte_rendu: "ok",
+          engagement: 3,
+          grossistes: [{ grossiste_id: "g1", category: "pharma" }],
+        },
+      }) as never
+    );
+    expect(res.status).toBe(201);
+    expect(supa._fromMock).toHaveBeenCalledWith("visit_grossistes");
+    expect(supa._fromMock).toHaveBeenCalledWith("doctor_grossistes");
+  });
 });
 
 describe("/api/visits GET", () => {

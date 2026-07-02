@@ -5,7 +5,7 @@ export interface DoctorQueryOptions {
   search?: string | null;
   wilaya?: string | null;
   specialty?: string | null;
-  type?: "medecin" | "pharmacien" | null;
+  type?: "medecin" | "pharmacien" | "grossiste" | null;
   page?: number;
   limit?: number;
 }
@@ -45,7 +45,7 @@ export async function fetchDoctors(
   }
   if (wilaya) query = query.eq("wilaya", wilaya);
   if (specialty) query = query.eq("specialty", specialty);
-  if (type === "medecin" || type === "pharmacien") {
+  if (type === "medecin" || type === "pharmacien" || type === "grossiste") {
     query = query.eq("doctor_type", type);
   }
 

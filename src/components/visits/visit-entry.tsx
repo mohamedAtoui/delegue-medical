@@ -19,7 +19,7 @@ import {
   Send,
   ImagePlus,
   CalendarPlus,
-  Trash2,
+  Truck,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,18 +29,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { DeadlineSelect } from "@/components/assignments/deadline-select";
 import { UserAvatar } from "@/components/shared/user-avatar";
+import { EngagementStars } from "@/components/shared/engagement-stars";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { VisitWithDetails, VisitComment, VisitAnswer } from "@/types";
@@ -523,14 +514,10 @@ export function VisitEntry({
   showDoctor = false,
   highlightUserId,
   onClick,
-  userRole,
-  onDelete,
   highlightVisitId,
 }: VisitEntryProps) {
   const isHighlightTarget = highlightVisitId === visit.id;
   const [open, setOpen] = useState<boolean>(isHighlightTarget);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Scroll the highlighted visit into view on mount (open state already set above)
@@ -542,6 +529,10 @@ export function VisitEntry({
     return () => clearTimeout(t);
   }, [isHighlightTarget]);
   const isPharm = visit.visit_type === "pharmacien";
+  const isGross = visit.visit_type === "grossiste";
+  const isPrescriber = visit.visit_type === "medecin";
+  const HeaderIcon = isGross ? Truck : isPrescriber ? Stethoscope : Pill;
+  const headerAccent = !isPrescriber;
   const isHighlighted =
     !highlightUserId || visit.user_id === highlightUserId;
 
@@ -612,14 +603,12 @@ export function VisitEntry({
           <div
             className={cn(
               "flex h-8 w-8 shrink-0 items-center justify-center rounded-full mt-0.5",
-              isPharm ? "bg-accent/10" : "bg-primary/10"
+              headerAccent ? "bg-accent/10" : "bg-primary/10"
             )}
           >
-            {isPharm ? (
-              <Pill className="h-4 w-4 text-accent" />
-            ) : (
-              <Stethoscope className="h-4 w-4 text-primary" />
-            )}
+            <HeaderIcon
+              className={cn("h-4 w-4", headerAccent ? "text-accent" : "text-primary")}
+            />
           </div>
         )}
         {showUser && (
@@ -638,14 +627,15 @@ export function VisitEntry({
                 <div
                   className={cn(
                     "flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
-                    isPharm ? "bg-accent/10" : "bg-primary/10"
+                    headerAccent ? "bg-accent/10" : "bg-primary/10"
                   )}
                 >
-                  {isPharm ? (
-                    <Pill className="h-3 w-3 text-accent" />
-                  ) : (
-                    <Stethoscope className="h-3 w-3 text-primary" />
-                  )}
+                  <HeaderIcon
+                    className={cn(
+                      "h-3 w-3",
+                      headerAccent ? "text-accent" : "text-primary"
+                    )}
+                  />
                 </div>
               )}
               <Link
@@ -653,7 +643,7 @@ export function VisitEntry({
                 onClick={(e) => e.stopPropagation()}
                 className="text-sm font-semibold truncate hover:underline cursor-pointer"
               >
-                {isPharm ? "" : "Dr. "}
+                {isPrescriber ? "Dr. " : ""}
                 {visit.doctor.last_name} {visit.doctor.first_name}
               </Link>
               {visit.doctor.specialty && (
@@ -705,12 +695,21 @@ export function VisitEntry({
             >
               {visit.objective ||
                 visit.compte_rendu ||
-                (isPharm ? "Visite pharmacien" : "Visite médecin")}
+                (isGross
+                  ? "Visite grossiste"
+                  : isPharm
+                  ? "Visite pharmacien"
+                  : "Visite médecin")}
             </p>
           )}
 
           {/* Badges row */}
           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+            {visit.engagement != null && visit.engagement > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <EngagementStars value={visit.engagement} size="sm" />
+              </span>
+            )}
             {(visit.comment_count ?? 0) > 0 && (
               <Badge
                 variant="outline"
@@ -900,6 +899,27 @@ export function VisitEntry({
             </div>
           )}
 
+          {/* Grossistes recorded at this visit */}
+          {visit.visit_grossistes && visit.visit_grossistes.length > 0 && (
+            <div className="flex items-start gap-1.5">
+              <Truck className="h-3 w-3 text-accent mt-1 shrink-0" />
+              <div className="flex flex-wrap gap-1">
+                {visit.visit_grossistes.map((vg) => (
+                  <Badge
+                    key={`${vg.grossiste_id}-${vg.category}`}
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0 h-4 gap-0.5 font-normal"
+                  >
+                    {vg.grossiste?.last_name ?? "Grossiste"}
+                    <span className="text-muted-foreground">
+                      {vg.category === "pharma" ? "· pharma" : "· para"}
+                    </span>
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Comments with inline input */}
           <InlineComments
             visitId={visit.id}
@@ -913,84 +933,6 @@ export function VisitEntry({
             doctorIsPharmacien={isPharm}
           />
 
-          {/* Bin button — supervisor only */}
-          {userRole === "superviseur" && visit.doctor && (
-            <>
-              <div
-                className="flex justify-end pt-2"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteDialog(true)}
-                  className="p-1.5 rounded-md hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"
-                  title="Supprimer cette visite"
-                  aria-label="Supprimer cette visite"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
-              <AlertDialog
-                open={showDeleteDialog}
-                onOpenChange={setShowDeleteDialog}
-              >
-                <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      Supprimer cette visite ?
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Visite du{" "}
-                      {format(new Date(visit.created_at), "d MMM yyyy", {
-                        locale: fr,
-                      })}{" "}
-                      chez {isPharm ? "" : "Dr. "}
-                      {visit.doctor.last_name} {visit.doctor.first_name}.
-                      Cette action est irréversible. Les commentaires seront
-                      supprimés et toute planification liée sera remise en
-                      attente.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel className="cursor-pointer">
-                      Annuler
-                    </AlertDialogCancel>
-                    <AlertDialogAction
-                      disabled={deleting}
-                      onClick={async (e) => {
-                        e.preventDefault();
-                        setDeleting(true);
-                        try {
-                          const res = await fetch(`/api/visits/${visit.id}`, {
-                            method: "DELETE",
-                          });
-                          if (!res.ok) {
-                            const err = await res.json();
-                            throw new Error(err.error);
-                          }
-                          toast.success("Visite supprimée");
-                          setShowDeleteDialog(false);
-                          onDelete?.(visit.id);
-                        } catch (err) {
-                          toast.error(
-                            err instanceof Error
-                              ? err.message
-                              : "Erreur lors de la suppression"
-                          );
-                        } finally {
-                          setDeleting(false);
-                        }
-                      }}
-                      className="bg-red-600 hover:bg-red-700 cursor-pointer"
-                    >
-                      {deleting ? "Suppression..." : "Supprimer"}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </>
-          )}
         </div>
       )}
     </div>

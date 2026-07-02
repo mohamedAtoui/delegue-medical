@@ -19,8 +19,13 @@ import { DoctorVisitTimeline } from "@/components/visits/doctor-visit-timeline";
 import { DeadlineSelect } from "@/components/assignments/deadline-select";
 import { YesNoToggle } from "@/components/visits/yes-no-toggle";
 import { ProductSelect } from "@/components/shared/product-select";
+import { EngagementStars } from "@/components/shared/engagement-stars";
+import {
+  GrossisteMultiSelect,
+  type GrossisteOption,
+} from "@/components/doctors/grossiste-combobox";
 import { toast } from "sonner";
-import { Send, Stethoscope, Pill, CalendarCheck, ChevronDown } from "lucide-react";
+import { Send, Stethoscope, Pill, Truck, CalendarCheck, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   Doctor,
@@ -81,6 +86,9 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [objective, setObjective] = useState("");
   const [compteRendu, setCompteRendu] = useState("");
+  const [engagement, setEngagement] = useState<number | null>(null);
+  const [grossistesPharma, setGrossistesPharma] = useState<GrossisteOption[]>([]);
+  const [grossistesParaPharm, setGrossistesParaPharm] = useState<GrossisteOption[]>([]);
   const [answers, setAnswers] = useState<AnswersMap>({});
   const [questions, setQuestions] = useState<ProductQuestionWithProduct[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
@@ -98,6 +106,9 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
     setDoctor(null);
     setAnswers({});
     setProductId("");
+    setEngagement(null);
+    setGrossistesPharma([]);
+    setGrossistesParaPharm([]);
   };
 
   // Reload questions when type or product changes.
@@ -145,9 +156,13 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
       return;
     }
     if (!doctor) {
-      toast.error(
-        `Veuillez sélectionner un ${visitType === "pharmacien" ? "pharmacien" : "médecin"}`
-      );
+      const who =
+        visitType === "pharmacien"
+          ? "pharmacien"
+          : visitType === "grossiste"
+          ? "grossiste"
+          : "médecin";
+      toast.error(`Veuillez sélectionner un ${who}`);
       return;
     }
     if (visitType === "medecin") {
@@ -205,13 +220,31 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
         })
         .filter((r): r is NonNullable<typeof r> => r !== null);
 
+      // Grossistes recorded at a pharmacy visit (one row each, per category).
+      const grossistesPayload =
+        visitType === "pharmacien"
+          ? [
+              ...grossistesPharma.map((g) => ({
+                grossiste_id: g.id,
+                category: "pharma" as const,
+              })),
+              ...grossistesParaPharm.map((g) => ({
+                grossiste_id: g.id,
+                category: "para_pharm" as const,
+              })),
+            ]
+          : [];
+
       const payload = {
         doctor_id: doctor.id,
         product_id: visitType === "medecin" ? productId : null,
         visit_type: visitType,
         objective: visitType === "medecin" ? objective.trim() : null,
         compte_rendu: compteRendu.trim(),
+        // Engagement applies to prescribers/pharmacies, not grossistes.
+        engagement: visitType === "grossiste" ? null : engagement,
         answers: answersPayload,
+        grossistes: grossistesPayload,
       };
 
       const res = await fetch("/api/visits", {
@@ -256,6 +289,9 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
       setDoctor(null);
       setObjective("");
       setCompteRendu("");
+      setEngagement(null);
+      setGrossistesPharma([]);
+      setGrossistesParaPharm([]);
       setAnswers({});
       setPlanNext(false);
       setNextDeadline("");
@@ -278,7 +314,7 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
         {/* Type selector — drives whether a product picker is needed */}
         <div className="space-y-2">
           <Label>Type de visite *</Label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
               type="button"
               onClick={() => switchType("medecin")}
@@ -305,6 +341,19 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
               <Pill className="h-5 w-5" />
               Pharmacien
             </button>
+            <button
+              type="button"
+              onClick={() => switchType("grossiste")}
+              className={cn(
+                "flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all cursor-pointer",
+                visitType === "grossiste"
+                  ? "border-accent bg-accent/5 text-accent font-semibold"
+                  : "border-border text-muted-foreground hover:border-accent/40"
+              )}
+            >
+              <Truck className="h-5 w-5" />
+              Grossiste
+            </button>
           </div>
         </div>
 
@@ -318,7 +367,13 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
 
         {/* Doctor search */}
         <div className="space-y-2">
-          <Label>{visitType === "pharmacien" ? "Pharmacien *" : "Médecin *"}</Label>
+          <Label>
+            {visitType === "pharmacien"
+              ? "Pharmacien *"
+              : visitType === "grossiste"
+              ? "Grossiste *"
+              : "Médecin *"}
+          </Label>
           <DoctorSearch
             selectedDoctor={doctor}
             onSelect={setDoctor}
@@ -366,6 +421,56 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
             className="min-h-[120px] resize-none"
           />
         </div>
+
+        {/* Engagement — médecin & pharmacien (not grossiste) */}
+        {visitType !== "grossiste" && (
+          <div className="space-y-2">
+            <Label>
+              Engagement {visitType === "pharmacien" ? "du pharmacien" : "du médecin"}
+            </Label>
+            <div className="flex items-center gap-3">
+              <EngagementStars
+                value={engagement}
+                onChange={setEngagement}
+                size="lg"
+              />
+              {engagement != null && (
+                <button
+                  type="button"
+                  onClick={() => setEngagement(null)}
+                  className="text-xs text-muted-foreground underline hover:text-foreground cursor-pointer"
+                >
+                  Effacer
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Facultatif. La moyenne des engagements saisis définit
+              l&apos;engagement final.
+            </p>
+          </div>
+        )}
+
+        {/* Grossistes — pharmacien only, one per case, from a pre-set list */}
+        {visitType === "pharmacien" && (
+          <Card className="bg-muted/20">
+            <CardContent className="p-4 space-y-4">
+              <p className="text-sm font-semibold text-foreground/90">
+                Grossistes
+              </p>
+              <GrossisteMultiSelect
+                label="Grossistes Pharma"
+                value={grossistesPharma}
+                onChange={setGrossistesPharma}
+              />
+              <GrossisteMultiSelect
+                label="Grossistes Para-Pharm"
+                value={grossistesParaPharm}
+                onChange={setGrossistesParaPharm}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Dynamic per-product questions */}
         {(visitType === "pharmacien" || productId) && (
@@ -481,28 +586,35 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
           </>
         )}
 
-        <Button
-          type="submit"
-          disabled={loading || !doctor || (visitType === "medecin" && !productId) || (planNext && !nextDeadline)}
-          className="w-full cursor-pointer"
-          size="lg"
-        >
-          {loading ? (
-            "Enregistrement..."
-          ) : (
-            <>
-              <Send className="mr-2 h-4 w-4" />
-              {planNext ? "Enregistrer la visite + planifier la prochaine" : "Enregistrer la visite"}
-            </>
-          )}
-        </Button>
+        <div className="sticky bottom-0 -mx-2 bg-background/95 px-2 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
+          <Button
+            type="submit"
+            disabled={loading || !doctor || (visitType === "medecin" && !productId) || (planNext && !nextDeadline)}
+            className="w-full cursor-pointer"
+            size="lg"
+          >
+            {loading ? (
+              "Enregistrement..."
+            ) : (
+              <>
+                <Send className="mr-2 h-4 w-4" />
+                {planNext ? "Enregistrer la visite + planifier la prochaine" : "Enregistrer la visite"}
+              </>
+            )}
+          </Button>
+        </div>
       </form>
 
       <Dialog open={showDoctorForm} onOpenChange={setShowDoctorForm}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              Ajouter un nouveau {visitType === "pharmacien" ? "pharmacien" : "médecin"}
+              Ajouter un nouveau{" "}
+              {visitType === "pharmacien"
+                ? "pharmacien"
+                : visitType === "grossiste"
+                ? "grossiste"
+                : "médecin"}
             </DialogTitle>
           </DialogHeader>
           <DoctorForm

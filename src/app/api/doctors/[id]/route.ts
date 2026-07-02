@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/utils/supabase/server";
 import { getOrCreateUser } from "@/lib/clerk/sync-user";
+import { cleanGrossisteLinks } from "@/lib/grossistes";
 
 export async function GET(
   request: NextRequest,
@@ -23,6 +24,17 @@ export async function GET(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 404 });
+  }
+
+  // Attach the pharmacy's grossiste links (best-effort, non-fatal).
+  if (data?.doctor_type === "pharmacien") {
+    const { data: links } = await supabase
+      .from("doctor_grossistes")
+      .select(
+        "grossiste_id, category, grossiste:doctors!doctor_grossistes_grossiste_id_fkey(id, last_name, wilaya)"
+      )
+      .eq("doctor_id", id);
+    (data as Record<string, unknown>).doctor_grossistes = links || [];
   }
 
   return NextResponse.json(data);
@@ -55,6 +67,7 @@ export async function PUT(
     grossiste_para_pharm,
     potentiel,
     engagement,
+    grossistes,
   } = body;
 
   if (!first_name || !last_name || !wilaya) {
@@ -65,7 +78,8 @@ export async function PUT(
   }
 
   const isPharmacien = doctor_type === "pharmacien";
-  if (!isPharmacien && !specialty) {
+  const isGrossiste = doctor_type === "grossiste";
+  if (!isPharmacien && !isGrossiste && !specialty) {
     return NextResponse.json({ error: "La spécialité est requise pour un médecin" }, { status: 400 });
   }
 
@@ -77,7 +91,7 @@ export async function PUT(
       first_name,
       last_name,
       doctor_type: doctor_type || "medecin",
-      specialty: isPharmacien ? null : (specialty || null),
+      specialty: isPharmacien || isGrossiste ? null : (specialty || null),
       address: address || null,
       google_maps_url: google_maps_url || null,
       wilaya,
@@ -98,6 +112,22 @@ export async function PUT(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Sync pharmacy → grossiste links when the client sent a grossistes array.
+  // A missing array means "don't touch links"; an empty array clears them.
+  if (isPharmacien && grossistes !== undefined) {
+    const links = cleanGrossisteLinks(grossistes);
+    await supabase.from("doctor_grossistes").delete().eq("doctor_id", id);
+    if (links.length > 0) {
+      await supabase.from("doctor_grossistes").insert(
+        links.map((g) => ({
+          doctor_id: id,
+          grossiste_id: g.grossiste_id,
+          category: g.category,
+        }))
+      );
+    }
   }
 
   return NextResponse.json(data);
