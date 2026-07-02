@@ -73,7 +73,7 @@ export async function fetchDashboardStats(
 
   const { data: visitsWithDoctors } = await supabase
     .from("visits")
-    .select("doctor:doctors(wilaya)")
+    .select("doctor:doctors!visits_doctor_id_fkey(wilaya)")
     .gte("created_at", from)
     .lte("created_at", to);
 

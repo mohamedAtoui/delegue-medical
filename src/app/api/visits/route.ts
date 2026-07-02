@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
       // Legacy answer columns stay NULL for new visits — answers live in
       // visit_answers.
     })
-    .select("*, doctor:doctors(*), user:users(*)")
+    .select("*, doctor:doctors!visits_doctor_id_fkey(*), user:users(*)")
     .single();
 
   if (visitError || !visit) {

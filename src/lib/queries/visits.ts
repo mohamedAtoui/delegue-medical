@@ -45,10 +45,12 @@ export async function fetchVisits(opts: VisitQueryOptions): Promise<VisitsResult
   const offset = (page - 1) * limit;
   const supabase = await createClient();
 
+  // The visit_grossistes junction gives PostgREST a second visits→doctors path,
+  // so the doctor embed MUST name the direct FK or it errors (PGRST201).
   const needsInnerDoctor = !!wilaya || !!search;
   const doctorSelect = needsInnerDoctor
-    ? "doctor:doctors!inner(*)"
-    : "doctor:doctors(*)";
+    ? "doctor:doctors!visits_doctor_id_fkey!inner(*)"
+    : "doctor:doctors!visits_doctor_id_fkey(*)";
 
   let query = supabase
     .from("visits")
