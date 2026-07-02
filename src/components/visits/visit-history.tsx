@@ -39,10 +39,10 @@ function groupByDoctor(visits: VisitWithDetails[]): DoctorGroup[] {
   for (const visit of visits) {
     const doctorId = visit.doctor_id;
     if (!groupMap.has(doctorId)) {
-      const isPharm = visit.doctor?.doctor_type === "pharmacien";
+      const isPrescriber = visit.doctor?.doctor_type === "medecin";
       groupMap.set(doctorId, {
         doctorId,
-        doctorName: `${isPharm ? "" : "Dr. "}${visit.doctor?.last_name || ""} ${visit.doctor?.first_name || ""}`.trim(),
+        doctorName: `${isPrescriber ? "Dr. " : ""}${visit.doctor?.last_name || ""} ${visit.doctor?.first_name || ""}`.trim(),
         specialty: visit.doctor?.specialty || null,
         wilaya: visit.doctor?.wilaya || "",
         commune: visit.doctor?.commune || null,

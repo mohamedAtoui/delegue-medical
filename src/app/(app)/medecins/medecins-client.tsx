@@ -9,7 +9,6 @@ import {
   Users,
   MapPin,
   Phone,
-  Star,
   Clock,
   ChevronDown,
   Pencil,
@@ -17,6 +16,7 @@ import {
   Mail,
   Truck,
 } from "lucide-react";
+import { EngagementStars } from "@/components/shared/engagement-stars";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -131,7 +131,7 @@ export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Répertoire</h1>
           <p className="text-sm text-muted-foreground">
-            Médecins et pharmaciens
+            Médecins, pharmaciens et grossistes
           </p>
         </div>
         <Link href="/medecins/nouveau">
@@ -143,11 +143,12 @@ export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
       </div>
 
       {/* Type tabs */}
-      <div className="grid grid-cols-3 gap-2 p-1 bg-muted/40 rounded-lg">
+      <div className="grid grid-cols-2 gap-2 p-1 bg-muted/40 rounded-lg sm:grid-cols-4">
         {([
           { key: "all", label: "Tous", icon: Users },
           { key: "medecin", label: "Médecins", icon: Stethoscope },
           { key: "pharmacien", label: "Pharmaciens", icon: Pill },
+          { key: "grossiste", label: "Grossistes", icon: Truck },
         ] as { key: TypeFilter; label: string; icon: typeof Users }[]).map((tab) => {
           const Icon = tab.icon;
           const active = typeFilter === tab.key;
@@ -156,8 +157,8 @@ export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
               key={tab.key}
               onClick={() => {
                 setTypeFilter(tab.key);
-                // Pharmaciens have no specialty — clear it to avoid empty results
-                if (tab.key === "pharmacien") setSpecialty("");
+                // Only médecins have a specialty — clear it for the others.
+                if (tab.key !== "medecin" && tab.key !== "all") setSpecialty("");
               }}
               className={cn(
                 "flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-all cursor-pointer",
@@ -184,7 +185,7 @@ export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
             className="pl-9"
           />
         </div>
-        {typeFilter !== "pharmacien" && (
+        {(typeFilter === "all" || typeFilter === "medecin") && (
           <div className="w-full sm:w-48">
             <Select value={specialty} onValueChange={(v) => setSpecialty(v ?? "")}>
               <SelectTrigger>
@@ -215,7 +216,11 @@ export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
         <MedicalLoader variant="inline" />
       ) : doctors.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-muted-foreground">Aucun résultat</p>
+          <p className="text-muted-foreground">
+            {typeFilter === "grossiste"
+              ? "Aucun grossiste — ajoutez-en un depuis un formulaire de visite pharmacie ou le bouton Ajouter."
+              : "Aucun résultat"}
+          </p>
         </div>
       ) : (
         <div className="relative space-y-3">
@@ -223,9 +228,16 @@ export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
           {doctors.map((doctor) => {
             const isExpanded = expandedId === doctor.id;
             const isPharm = doctor.doctor_type === "pharmacien";
-            const Icon = isPharm ? Pill : Stethoscope;
-            const iconBg = isPharm ? "bg-accent/10" : "bg-primary/10";
-            const iconColor = isPharm ? "text-accent" : "text-primary";
+            const isGross = doctor.doctor_type === "grossiste";
+            const isPrescriber = doctor.doctor_type === "medecin";
+            const Icon = isGross ? Truck : isPharm ? Pill : Stethoscope;
+            const iconBg = isPrescriber ? "bg-primary/10" : "bg-accent/10";
+            const iconColor = isPrescriber ? "text-primary" : "text-accent";
+            const typeLabel = isGross
+              ? "Grossiste"
+              : isPharm
+              ? "Pharmacien"
+              : "Médecin";
             const phoneDisplay = doctor.phone_mobile || doctor.phone_fixe || (doctor as unknown as Record<string, string>).phone;
 
             return (
@@ -249,13 +261,13 @@ export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-sm">
-                            {isPharm ? "" : "Dr. "}
+                            {isPrescriber ? "Dr. " : ""}
                             {doctor.last_name} {doctor.first_name}
                           </span>
                           <Badge variant="outline" className="text-xs">
-                            {isPharm ? "Pharmacien" : "Médecin"}
+                            {typeLabel}
                           </Badge>
-                          {doctor.specialty && !isPharm && (
+                          {doctor.specialty && isPrescriber && (
                             <Badge variant="secondary" className="text-xs">
                               {doctor.specialty}
                             </Badge>
@@ -287,18 +299,11 @@ export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
                             </span>
                           )}
                           {doctor.engagement != null && doctor.engagement > 0 && (
-                            <span className="flex items-center gap-0.5">
-                              {[1, 2, 3, 4, 5].map((s) => (
-                                <Star
-                                  key={s}
-                                  className={`h-3 w-3 ${
-                                    s <= doctor.engagement!
-                                      ? "fill-yellow-400 text-yellow-400"
-                                      : "text-muted-foreground/20"
-                                  }`}
-                                />
-                              ))}
-                            </span>
+                            <EngagementStars
+                              value={doctor.engagement}
+                              size="sm"
+                              showValue
+                            />
                           )}
                           {doctor.last_visited_at && (
                             <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -426,7 +431,12 @@ export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
           <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
-                Modifier {expandedDoctor.doctor_type === "pharmacien" ? "le pharmacien" : "le médecin"}
+                Modifier{" "}
+                {expandedDoctor.doctor_type === "grossiste"
+                  ? "le grossiste"
+                  : expandedDoctor.doctor_type === "pharmacien"
+                  ? "le pharmacien"
+                  : "le médecin"}
               </DialogTitle>
             </DialogHeader>
             <DoctorForm

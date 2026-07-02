@@ -67,6 +67,11 @@ All migrations are **idempotent** — re-running on an existing DB is safe.
 014_doctor_commune.sql           ← optional commune field
 015_product_extensions.sql       ← product stock/price/lab fields
 016_visits_product_id_nullable.sql  ← pharmacien visits cover all products
+017_ai_readonly_role.sql         ← least-privilege role for the Assistant IA
+018_ai_conversations.sql         ← Assistant IA chat history
+019_visit_engagement.sql         ← per-visit engagement + doctor average (trigger)
+020_grossistes.sql               ← grossiste contacts + pharmacy↔grossiste links
+021_reporting_views.sql          ← additive grossiste views for the Assistant IA
 ```
 
 > **Note:** there's a numbering gap (002–007) — those changes were applied ad-hoc during early development and are consolidated into `001_initial_schema.sql`.

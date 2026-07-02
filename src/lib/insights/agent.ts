@@ -2,6 +2,7 @@ import { createMistral } from "@ai-sdk/mistral";
 import { tool } from "ai";
 import { z } from "zod";
 import { runReadOnlySql, UnsafeSqlError } from "./db";
+import { getLiveSchema } from "./schema";
 
 /**
  * The Mistral text-to-SQL agent powering the Assistant IA.
@@ -31,17 +32,24 @@ export function getSchemaContext(): string {
 TABLES PRINCIPALES
 - users(id uuid, clerk_id, email, first_name, last_name, phone, avatar_url,
     role text['delegue'|'superviseur'], daily_visit_goal int, created_at, updated_at)
-- doctors(id uuid, first_name, last_name, doctor_type text['medecin'|'pharmacien'],
+- doctors(id uuid, first_name, last_name, doctor_type text['medecin'|'pharmacien'|'grossiste'],
     specialty, address, wilaya, commune, phone, phone_fixe, phone_mobile, email,
-    grossiste_pharma, grossiste_para_pharm, potentiel text['A'|'B'|'C'|null],
-    engagement, latitude, longitude, created_by uuid->users.id, created_at, updated_at)
+    grossiste_pharma, grossiste_para_pharm (texte hérité, gelé), potentiel text['A'|'B'|'C'|null],
+    engagement numeric (MOYENNE des engagements de visite), latitude, longitude,
+    created_by uuid->users.id, created_at, updated_at)
+    -- les grossistes sont des contacts doctor_type='grossiste' (nom dans last_name).
 - products(id uuid, name, description, active bool, reference, laboratory,
     quantity int, price numeric, notes, created_at, updated_at)
 - visits(id uuid, user_id uuid->users.id, doctor_id uuid->doctors.id,
-    product_id uuid->products.id (null pour pharmacien), visit_type text['medecin'|'pharmacien'],
-    objective text, compte_rendu text, created_at)
+    product_id uuid->products.id (null pour pharmacien/grossiste),
+    visit_type text['medecin'|'pharmacien'|'grossiste'],
+    objective text, compte_rendu text, engagement int[1..5|null] (saisi par visite), created_at)
     -- colonnes héritées (anciennes visites): accepted_order bool, synapgen_count int,
     --   prescriptions_received int, prescribing_doctor text, etc. Préférer visit_answers.
+- doctor_grossistes(doctor_id->doctors.id (pharmacie), grossiste_id->doctors.id,
+    category text['pharma'|'para_pharm']) -- grossistes actuels d'une pharmacie.
+- visit_grossistes(visit_id->visits.id, grossiste_id->doctors.id,
+    category text['pharma'|'para_pharm']) -- grossistes relevés lors d'une visite pharmacie.
 - visit_answers(id, visit_id->visits.id, question_id->product_questions.id,
     value_boolean bool, value_text text, value_number numeric, created_at)
     -- une seule des trois valeurs est non-nulle par ligne.
@@ -65,14 +73,50 @@ VUES (agrégats prêts à l'emploi)
 - v_dynamic_answers_long_rows — réponses de formulaire au format long.
 - v_comments_full_rows — commentaires enrichis.
 - v_assignments_outcomes_rows — planifications et leur issue.
+- v_visit_grossistes_rows — grossistes relevés par visite (pharmacie, grossiste, catégorie).
+- v_doctor_grossistes_rows — grossistes actuels par pharmacie.
 
 NOTES
 - Les dates sont en UTC (timestamptz). Pour "cette semaine" utilise date_trunc('week', now()).
-- doctor_type='pharmacien' => visites sans product_id; 'medecin' => product_id requis.
+- doctor_type='pharmacien'/'grossiste' => visites sans product_id; 'medecin' => product_id requis.
+- Le nombre de visites d'un médecin = count(*) sur visits (PAS le nombre de commentaires).
+- engagement du médecin = doctors.engagement = moyenne de visits.engagement (non-nuls).
 - Joins fréquents: visits.user_id=users.id, visits.doctor_id=doctors.id.`;
 }
 
-export function getSystemPrompt(): string {
+/** Few-shot examples that anchor the model on the real schema + question style. */
+function getExamples(): string {
+  return `EXEMPLES (question -> SQL)
+- « Nombre de visites par délégué cette semaine »
+  SELECT u.first_name, u.last_name, COUNT(*) AS visites
+  FROM visits v JOIN users u ON u.id = v.user_id
+  WHERE v.created_at >= date_trunc('week', now())
+  GROUP BY u.id, u.first_name, u.last_name
+  ORDER BY visites DESC;
+- « Engagement moyen des médecins par wilaya »
+  SELECT wilaya, ROUND(AVG(engagement), 2) AS engagement_moyen
+  FROM doctors
+  WHERE doctor_type = 'medecin' AND engagement IS NOT NULL
+  GROUP BY wilaya ORDER BY engagement_moyen DESC;
+- « Combien de visites a le médecin X ? » (par visites, pas par commentaires)
+  SELECT COUNT(*) AS nb_visites
+  FROM visits v JOIN doctors d ON d.id = v.doctor_id
+  WHERE d.last_name ILIKE '%X%';
+- « Quelles pharmacies sont fournies par le grossiste "Y" ? »
+  SELECT DISTINCT ph.last_name AS pharmacie, ph.wilaya
+  FROM doctor_grossistes dg
+  JOIN doctors ph ON ph.id = dg.doctor_id
+  JOIN doctors g ON g.id = dg.grossiste_id
+  WHERE g.doctor_type = 'grossiste' AND g.last_name ILIKE '%Y%';`;
+}
+
+export async function getSystemPrompt(): Promise<string> {
+  // Prefer the live introspected schema; fall back to the hand-written one.
+  const live = await getLiveSchema();
+  const schema = live
+    ? `${getSchemaContext()}\n\n${live}`
+    : getSchemaContext();
+
   return `Tu es l'assistant analytique de Handson, une entreprise pharmaceutique algérienne. Tu réponds aux questions du superviseur sur les données de visites médicales en interrogeant la base en direct.
 
 OUTILS
@@ -82,7 +126,12 @@ OUTILS
 RÈGLES SQL
 - PostgreSQL. Uniquement des requêtes SELECT (ou WITH ... SELECT). Jamais d'écriture.
 - Limite les résultats (ex: LIMIT, GROUP BY) — ne ramène pas des milliers de lignes.
-- Si une requête échoue, lis l'erreur et corrige-la.
+- Utilise ILIKE pour les recherches de noms (insensible à la casse).
+
+RÉCUPÉRATION D'ERREUR
+- Si runSql renvoie un champ "error", NE t'excuse pas et NE renonce pas : lis le message, corrige la requête et réessaie.
+- Colonne ou table inconnue ? Vérifie le SCHÉMA ci-dessous, ou interroge information_schema.columns pour trouver le bon nom, puis relance.
+- Persiste jusqu'à 3 tentatives avant d'expliquer honnêtement pourquoi tu n'y arrives pas.
 
 RÈGLES DE RÉPONSE
 - Réponds en français. Le texte est affiché en markdown rendu : utilise une mise en forme propre et lisible.
@@ -95,8 +144,10 @@ RÈGLES DE RÉPONSE
 - Quand tu affiches un graphique, ajoute une phrase de synthèse (ne répète pas toutes les valeurs).
 - Sois concis, professionnel et actionnable.
 
+${getExamples()}
+
 SCHÉMA
-${getSchemaContext()}`;
+${schema}`;
 }
 
 /** A chart spec the UI renders with recharts. */

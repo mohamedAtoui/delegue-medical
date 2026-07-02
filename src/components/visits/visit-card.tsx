@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Stethoscope,
   Pill,
+  Truck,
   MapPin,
   ChevronDown,
   ChevronUp,
@@ -17,6 +18,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { VisitEntry } from "@/components/visits/visit-entry";
+import { EngagementStars } from "@/components/shared/engagement-stars";
 import type { VisitWithDetails, DoctorType, Potentiel } from "@/types";
 
 // Re-export for backward compat
@@ -101,14 +103,18 @@ export function DoctorVisitGroup({
     (sum, v) => sum + (v.comment_count || 0),
     0
   );
+  // True total visits for this doctor (server-computed), independent of the
+  // filtered/paginated page. Falls back to the page length if not provided.
+  const doctorVisitCount = visits[0]?.doctor_visit_count ?? visits.length;
+  const doctorEngagement = visits[0]?.doctor?.engagement ?? null;
 
-  const isPharm = doctorType
-    ? doctorType === "pharmacien"
-    : visits[0]?.doctor?.doctor_type === "pharmacien" ||
-      visits[0]?.visit_type === "pharmacien";
-  const Icon = isPharm ? Pill : Stethoscope;
-  const iconBg = isPharm ? "bg-accent/10" : "bg-primary/10";
-  const iconColor = isPharm ? "text-accent" : "text-primary";
+  const effectiveType =
+    doctorType ?? visits[0]?.doctor?.doctor_type ?? visits[0]?.visit_type;
+  const isGross = effectiveType === "grossiste";
+  const isPrescriber = effectiveType === "medecin";
+  const Icon = isGross ? Truck : isPrescriber ? Stethoscope : Pill;
+  const iconBg = isPrescriber ? "bg-primary/10" : "bg-accent/10";
+  const iconColor = isPrescriber ? "text-primary" : "text-accent";
 
   // Pick the list to display:
   //   - if we've fetched the full history, use that
@@ -167,6 +173,13 @@ export function DoctorVisitGroup({
                     {specialty}
                   </Badge>
                 )}
+                {doctorEngagement != null && doctorEngagement > 0 && (
+                  <EngagementStars
+                    value={doctorEngagement}
+                    size="sm"
+                    showValue
+                  />
+                )}
               </div>
               <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">
                 <span className="flex items-center gap-1 min-w-0">
@@ -179,12 +192,15 @@ export function DoctorVisitGroup({
                 </span>
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  {visits.length} visite{visits.length !== 1 ? "s" : ""}
+                  {doctorVisitCount} visite{doctorVisitCount !== 1 ? "s" : ""}
                 </span>
                 {totalComments > 0 && (
-                  <span className="flex items-center gap-1">
+                  <span
+                    className="flex items-center gap-1"
+                    title={`${totalComments} commentaire${totalComments !== 1 ? "s" : ""}`}
+                  >
                     <MessageSquare className="h-3 w-3" />
-                    {totalComments}
+                    {totalComments} comm.
                   </span>
                 )}
                 <span className="flex items-center gap-1">

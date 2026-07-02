@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Stethoscope,
   Pill,
+  Truck,
   Users,
   Search,
   X,
@@ -207,12 +208,13 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
       {/* Filters */}
       <div className="space-y-3">
         {/* Type tabs */}
-        <div className="grid grid-cols-3 gap-2 p-1 bg-muted/40 rounded-lg">
+        <div className="grid grid-cols-2 gap-2 p-1 bg-muted/40 rounded-lg sm:grid-cols-4">
           {(
             [
               { key: "", label: "Toutes", icon: Users },
               { key: "medecin", label: "Médecins", icon: Stethoscope },
               { key: "pharmacien", label: "Pharmaciens", icon: Pill },
+              { key: "grossiste", label: "Grossistes", icon: Truck },
             ] as { key: TypeFilter; label: string; icon: typeof Users }[]
           ).map((tab) => {
             const Icon = tab.icon;

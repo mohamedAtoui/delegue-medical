@@ -24,16 +24,25 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
+import { EngagementStars } from "@/components/shared/engagement-stars";
+import {
+  GrossisteMultiSelect,
+  type GrossisteOption,
+} from "@/components/doctors/grossiste-combobox";
 import { toast } from "sonner";
-import { Star, Stethoscope, Pill, Trash2, AlertTriangle } from "lucide-react";
+import { Stethoscope, Pill, Truck, Trash2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Doctor, DoctorType } from "@/types";
+import type { Doctor, DoctorType, DoctorGrossiste } from "@/types";
+
+type DoctorWithGrossistes = Doctor & {
+  doctor_grossistes?: DoctorGrossiste[];
+};
 
 interface DoctorFormProps {
   onSuccess: (doctor: Doctor) => void;
   onCancel?: () => void;
   onDelete?: () => void;
-  initialData?: Doctor | null;
+  initialData?: DoctorWithGrossistes | null;
   defaultType?: DoctorType;
   userRole?: string;
 }
@@ -60,6 +69,46 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
     potentiel: "",
     engagement: 0,
   });
+  const [grossistesPharma, setGrossistesPharma] = useState<GrossisteOption[]>([]);
+  const [grossistesParaPharm, setGrossistesParaPharm] = useState<
+    GrossisteOption[]
+  >([]);
+
+  // Load the pharmacy's current grossiste links when editing. Prefer links
+  // already attached to initialData; otherwise fetch them so a save doesn't
+  // wipe existing links.
+  useEffect(() => {
+    if (!initialData || initialData.doctor_type !== "pharmacien") return;
+    const applyLinks = (links: DoctorGrossiste[]) => {
+      const toOption = (l: DoctorGrossiste): GrossisteOption => ({
+        id: l.grossiste_id,
+        last_name: l.grossiste?.last_name ?? "Grossiste",
+        wilaya: l.grossiste?.wilaya ?? "",
+      });
+      setGrossistesPharma(
+        links.filter((l) => l.category === "pharma").map(toOption)
+      );
+      setGrossistesParaPharm(
+        links.filter((l) => l.category === "para_pharm").map(toOption)
+      );
+    };
+    if (initialData.doctor_grossistes) {
+      applyLinks(initialData.doctor_grossistes);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/doctors/${initialData.id}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && Array.isArray(d?.doctor_grossistes)) {
+          applyLinks(d.doctor_grossistes);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [initialData]);
 
   useEffect(() => {
     if (initialData) {
@@ -85,27 +134,42 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
 
   const isEdit = !!initialData;
   const isPharmacien = form.doctor_type === "pharmacien";
+  const isGrossiste = form.doctor_type === "grossiste";
+  const typeLabel = isGrossiste
+    ? "Grossiste"
+    : isPharmacien
+    ? "Pharmacien"
+    : "Médecin";
+  const typeLabelLower = typeLabel.toLowerCase();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Common required
-    if (!form.first_name || !form.last_name || !form.wilaya) {
-      toast.error("Nom, prénom et wilaya sont requis");
-      return;
-    }
-    if (!form.address) {
-      toast.error("L'adresse est requise");
-      return;
-    }
-    if (!form.phone_fixe) {
-      toast.error("Le téléphone fixe est requis");
-      return;
-    }
-    // Médecin-specific
-    if (!isPharmacien && !form.specialty) {
-      toast.error("La spécialité est requise pour un médecin");
-      return;
+    // Grossistes are lightweight contacts (name + wilaya only).
+    if (isGrossiste) {
+      if (!form.last_name || !form.wilaya) {
+        toast.error("Nom et wilaya sont requis");
+        return;
+      }
+    } else {
+      // Common required
+      if (!form.first_name || !form.last_name || !form.wilaya) {
+        toast.error("Nom, prénom et wilaya sont requis");
+        return;
+      }
+      if (!form.address) {
+        toast.error("L'adresse est requise");
+        return;
+      }
+      if (!form.phone_fixe) {
+        toast.error("Le téléphone fixe est requis");
+        return;
+      }
+      // Médecin-specific
+      if (!isPharmacien && !form.specialty) {
+        toast.error("La spécialité est requise pour un médecin");
+        return;
+      }
     }
 
     setLoading(true);
@@ -127,6 +191,19 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
           google_maps_url: form.google_maps_url || null,
           grossiste_pharma: isPharmacien ? (form.grossiste_pharma || null) : null,
           grossiste_para_pharm: isPharmacien ? (form.grossiste_para_pharm || null) : null,
+          // New grossiste model: link rows synced server-side (pharmacien only).
+          grossistes: isPharmacien
+            ? [
+                ...grossistesPharma.map((g) => ({
+                  grossiste_id: g.id,
+                  category: "pharma" as const,
+                })),
+                ...grossistesParaPharm.map((g) => ({
+                  grossiste_id: g.id,
+                  category: "para_pharm" as const,
+                })),
+              ]
+            : undefined,
         }),
       });
 
@@ -138,8 +215,8 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
       const doctor = await res.json();
       toast.success(
         isEdit
-          ? `${isPharmacien ? "Pharmacien" : "Médecin"} modifié avec succès`
-          : `${isPharmacien ? "Pharmacien" : "Médecin"} ajouté avec succès`
+          ? `${typeLabel} modifié avec succès`
+          : `${typeLabel} ajouté avec succès`
       );
       onSuccess(doctor);
     } catch (err) {
@@ -154,7 +231,7 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
       {/* Type selector */}
       <div className="space-y-2">
         <Label>Type *</Label>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <button
             type="button"
             onClick={() => setForm({ ...form, doctor_type: "medecin" })}
@@ -180,6 +257,19 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
           >
             <Pill className="h-5 w-5" />
             Pharmacien
+          </button>
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, doctor_type: "grossiste" })}
+            className={cn(
+              "flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all cursor-pointer",
+              form.doctor_type === "grossiste"
+                ? "border-accent bg-accent/5 text-accent font-semibold"
+                : "border-border text-muted-foreground hover:border-accent/40"
+            )}
+          >
+            <Truck className="h-5 w-5" />
+            Grossiste
           </button>
         </div>
       </div>
@@ -207,7 +297,7 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
       </div>
 
       {/* Spécialité — médecin only */}
-      {!isPharmacien && (
+      {!isPharmacien && !isGrossiste && (
         <div className="space-y-2">
           <Label>Spécialité *</Label>
           <Select
@@ -251,13 +341,23 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
       {/* Adresse */}
       <div className="space-y-2">
         <Label htmlFor="address">
-          {isPharmacien ? "Adresse *" : "Adresse cabinet *"}
+          {isGrossiste
+            ? "Adresse"
+            : isPharmacien
+            ? "Adresse *"
+            : "Adresse cabinet *"}
         </Label>
         <Input
           id="address"
           value={form.address}
           onChange={(e) => setForm({ ...form, address: e.target.value })}
-          placeholder={isPharmacien ? "Adresse de la pharmacie" : "Adresse du cabinet"}
+          placeholder={
+            isGrossiste
+              ? "Adresse du grossiste"
+              : isPharmacien
+              ? "Adresse de la pharmacie"
+              : "Adresse du cabinet"
+          }
         />
       </div>
 
@@ -276,7 +376,9 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
       {/* Phones */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="phone_fixe">Téléphone fixe *</Label>
+          <Label htmlFor="phone_fixe">
+            Téléphone fixe{isGrossiste ? "" : " *"}
+          </Label>
           <Input
             id="phone_fixe"
             value={form.phone_fixe}
@@ -307,68 +409,57 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
         />
       </div>
 
-      {/* Potentiel + engagement */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label>Potentiel</Label>
-          <Select
-            value={form.potentiel}
-            onValueChange={(v) => setForm({ ...form, potentiel: v ?? "" })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Sélectionner" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="A">A - Fort</SelectItem>
-              <SelectItem value="B">B - Moyen</SelectItem>
-              <SelectItem value="C">C - Faible</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>Engagement avec le labo</Label>
-          <div className="flex items-center gap-1 pt-1">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                type="button"
-                onClick={() => setForm({ ...form, engagement: star })}
-                className="cursor-pointer"
-              >
-                <Star
-                  className={`h-6 w-6 transition-colors ${
-                    star <= form.engagement
-                      ? "fill-yellow-400 text-yellow-400"
-                      : "text-muted-foreground/30"
-                  }`}
-                />
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Pharmacien-specific */}
-      {isPharmacien && (
+      {/* Potentiel + engagement — not for grossistes */}
+      {!isGrossiste && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="grossiste_pharma">Grossiste Pharma</Label>
-            <Input
-              id="grossiste_pharma"
-              value={form.grossiste_pharma}
-              onChange={(e) => setForm({ ...form, grossiste_pharma: e.target.value })}
-              placeholder="Nom du grossiste"
-            />
+            <Label>Potentiel</Label>
+            <Select
+              value={form.potentiel}
+              onValueChange={(v) => setForm({ ...form, potentiel: v ?? "" })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Sélectionner" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="A">A - Fort</SelectItem>
+                <SelectItem value="B">B - Moyen</SelectItem>
+                <SelectItem value="C">C - Faible</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="grossiste_para_pharm">Grossiste Para-Pharm</Label>
-            <Input
-              id="grossiste_para_pharm"
-              value={form.grossiste_para_pharm}
-              onChange={(e) => setForm({ ...form, grossiste_para_pharm: e.target.value })}
-              placeholder="Nom du grossiste"
-            />
+            <Label>Engagement avec le labo</Label>
+            <div className="pt-1">
+              <EngagementStars
+                value={form.engagement}
+                onChange={(v) => setForm({ ...form, engagement: v })}
+                size="lg"
+              />
+            </div>
+            {isEdit && (
+              <p className="text-xs text-muted-foreground">
+                Valeur de base ; recalculée en moyenne dès qu&apos;un engagement
+                est saisi en visite.
+              </p>
+            )}
           </div>
+        </div>
+      )}
+
+      {/* Pharmacien grossistes — from the shared directory, one per case */}
+      {isPharmacien && (
+        <div className="space-y-4">
+          <GrossisteMultiSelect
+            label="Grossistes Pharma"
+            value={grossistesPharma}
+            onChange={setGrossistesPharma}
+          />
+          <GrossisteMultiSelect
+            label="Grossistes Para-Pharm"
+            value={grossistesParaPharm}
+            onChange={setGrossistesParaPharm}
+          />
         </div>
       )}
 
@@ -383,7 +474,7 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
             ? "En cours..."
             : isEdit
             ? "Modifier"
-            : `Ajouter le ${isPharmacien ? "pharmacien" : "médecin"}`}
+            : `Ajouter le ${typeLabelLower}`}
         </Button>
       </div>
 
@@ -397,7 +488,7 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
               <h3 className="text-sm font-semibold text-red-800">Zone dangereuse</h3>
             </div>
             <p className="text-xs text-red-700/80">
-              Supprimer {isPharmacien ? "ce pharmacien" : "ce médecin"} ainsi que toutes ses visites,
+              Supprimer ce {typeLabelLower} ainsi que toutes ses visites,
               commentaires et planifications. Cette action est irréversible.
             </p>
             <Button
@@ -419,7 +510,7 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle className="text-red-700">
-                  Supprimer {isPharmacien ? "" : "Dr. "}
+                  Supprimer {isPharmacien || isGrossiste ? "" : "Dr. "}
                   {initialData.last_name} {initialData.first_name} ?
                 </AlertDialogTitle>
                 <AlertDialogDescription className="space-y-3">
@@ -430,7 +521,7 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
                   <span className="block text-sm font-medium text-foreground">
                     Tapez{" "}
                     <span className="font-mono text-red-600">
-                      supprimer {isPharmacien ? "" : "Dr. "}
+                      supprimer {isPharmacien || isGrossiste ? "" : "Dr. "}
                       {initialData.last_name} {initialData.first_name}
                     </span>
                     {" "}pour confirmer :
@@ -440,7 +531,7 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
               <Input
                 value={deleteConfirmText}
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
-                placeholder={`supprimer ${isPharmacien ? "" : "Dr. "}${initialData.last_name} ${initialData.first_name}`}
+                placeholder={`supprimer ${isPharmacien || isGrossiste ? "" : "Dr. "}${initialData.last_name} ${initialData.first_name}`}
                 className="font-mono text-sm"
               />
               <AlertDialogFooter>
@@ -449,7 +540,7 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
                   disabled={
                     deleting ||
                     deleteConfirmText.trim().toLowerCase() !==
-                      `supprimer ${isPharmacien ? "" : "dr. "}${initialData.last_name} ${initialData.first_name}`.toLowerCase()
+                      `supprimer ${isPharmacien || isGrossiste ? "" : "dr. "}${initialData.last_name} ${initialData.first_name}`.toLowerCase()
                   }
                   onClick={async (e) => {
                     e.preventDefault();
@@ -463,7 +554,7 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
                         throw new Error(err.error);
                       }
                       toast.success(
-                        `${isPharmacien ? "Pharmacien" : "Médecin"} supprimé avec toutes ses données`
+                        `${typeLabel} supprimé avec toutes ses données`
                       );
                       setShowDeleteDialog(false);
                       onDelete?.();
