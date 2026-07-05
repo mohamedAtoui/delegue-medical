@@ -13,26 +13,124 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { WilayaSelect } from "@/components/shared/wilaya-select";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { Doctor } from "@/types";
+import type { Doctor, GrossisteCategory } from "@/types";
 
-export type GrossisteOption = Pick<Doctor, "id" | "last_name" | "wilaya">;
+/**
+ * A grossiste can supply a pharmacy with pharma products, para-pharm products,
+ * or both. The DB stores one `(grossiste_id, category)` row per category, so
+ * "both" is simply two rows. In the UI we collapse that into a single choice.
+ */
+export type SelectedCategory = GrossisteCategory | "both";
+
+export interface SelectedGrossiste {
+  id: string;
+  last_name: string;
+  wilaya: string;
+  category: SelectedCategory;
+}
+
+type GrossisteOption = Pick<Doctor, "id" | "last_name" | "wilaya">;
+// Kept for backward-compat imports.
+export type { GrossisteOption };
+
+const CATEGORY_OPTIONS: { value: SelectedCategory; label: string }[] = [
+  { value: "pharma", label: "Pharma" },
+  { value: "para_pharm", label: "Para-Pharm" },
+  { value: "both", label: "Les deux" },
+];
+
+/** Expand UI selections into flat `(grossiste_id, category)` link rows. */
+export function expandGrossisteSelection(
+  items: SelectedGrossiste[]
+): { grossiste_id: string; category: GrossisteCategory }[] {
+  return items.flatMap((g) => {
+    const cats: GrossisteCategory[] =
+      g.category === "both" ? ["pharma", "para_pharm"] : [g.category];
+    return cats.map((category) => ({ grossiste_id: g.id, category }));
+  });
+}
+
+/** Collapse flat link rows (one per category) back into UI selections. */
+export function collapseGrossisteLinks(
+  links: {
+    grossiste_id: string;
+    category: GrossisteCategory;
+    grossiste?: Pick<Doctor, "id" | "last_name" | "wilaya"> | null;
+  }[]
+): SelectedGrossiste[] {
+  const byId = new Map<
+    string,
+    { last_name: string; wilaya: string; cats: Set<GrossisteCategory> }
+  >();
+  for (const l of links) {
+    const entry = byId.get(l.grossiste_id) ?? {
+      last_name: l.grossiste?.last_name ?? "Grossiste",
+      wilaya: l.grossiste?.wilaya ?? "",
+      cats: new Set<GrossisteCategory>(),
+    };
+    entry.cats.add(l.category);
+    byId.set(l.grossiste_id, entry);
+  }
+  return [...byId.entries()].map(([id, e]) => ({
+    id,
+    last_name: e.last_name,
+    wilaya: e.wilaya,
+    category:
+      e.cats.has("pharma") && e.cats.has("para_pharm")
+        ? "both"
+        : e.cats.has("pharma")
+        ? "pharma"
+        : "para_pharm",
+  }));
+}
 
 interface GrossisteMultiSelectProps {
-  label: string;
-  value: GrossisteOption[];
-  onChange: (next: GrossisteOption[]) => void;
+  /** Optional heading; defaults to "Grossistes". */
+  label?: string;
+  value: SelectedGrossiste[];
+  onChange: (next: SelectedGrossiste[]) => void;
+}
+
+/** Three-way segmented control for a grossiste's supply category. */
+function CategorySelect({
+  value,
+  onChange,
+}: {
+  value: SelectedCategory;
+  onChange: (next: SelectedCategory) => void;
+}) {
+  return (
+    <div className="flex rounded-md border border-border bg-background p-0.5">
+      {CATEGORY_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          className={cn(
+            "rounded px-2 py-1 text-xs font-medium transition-colors cursor-pointer whitespace-nowrap",
+            value === opt.value
+              ? "bg-accent/15 text-accent"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /**
- * "One grossiste per row" picker over the grossiste directory
- * (doctor_type='grossiste'), with an inline quick-add for a brand-new
- * grossiste (name + wilaya). Used in the pharmacy visit form and the doctor
- * form. Selecting a grossiste that isn't in the list yet is a two-step: type
- * the name, then "Créer".
+ * Single-box picker over the grossiste directory (doctor_type='grossiste').
+ * Each selected grossiste carries a supply category — Pharma, Para-Pharm, or
+ * Les deux — editable inline. Includes an inline quick-add (name + wilaya +
+ * category) for a brand-new grossiste. Used in the pharmacy visit form and the
+ * doctor form.
  */
 export function GrossisteMultiSelect({
-  label,
+  label = "Grossistes",
   value,
   onChange,
 }: GrossisteMultiSelectProps) {
@@ -44,6 +142,7 @@ export function GrossisteMultiSelect({
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newWilaya, setNewWilaya] = useState("");
+  const [newCategory, setNewCategory] = useState<SelectedCategory>("both");
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -74,17 +173,21 @@ export function GrossisteMultiSelect({
 
   const selectedIds = new Set(value.map((g) => g.id));
 
-  const add = (g: GrossisteOption) => {
-    if (!selectedIds.has(g.id)) onChange([...value, g]);
+  const add = (g: GrossisteOption, category: SelectedCategory = "both") => {
+    if (!selectedIds.has(g.id))
+      onChange([...value, { ...g, category }]);
     setSearch("");
     setOpen(false);
     setResults([]);
   };
   const remove = (id: string) => onChange(value.filter((g) => g.id !== id));
+  const setCategory = (id: string, category: SelectedCategory) =>
+    onChange(value.map((g) => (g.id === id ? { ...g, category } : g)));
 
   const openCreate = () => {
     setNewName(search.trim());
     setNewWilaya("");
+    setNewCategory("both");
     setShowCreate(true);
     setOpen(false);
   };
@@ -115,11 +218,15 @@ export function GrossisteMultiSelect({
         throw new Error(e.error);
       }
       const created: Doctor = await res.json();
-      add({ id: created.id, last_name: created.last_name, wilaya: created.wilaya });
+      add(
+        { id: created.id, last_name: created.last_name, wilaya: created.wilaya },
+        newCategory
+      );
       toast.success("Grossiste ajouté");
       setShowCreate(false);
       setNewName("");
       setNewWilaya("");
+      setNewCategory("both");
       setSearch("");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erreur lors de l'ajout");
@@ -134,13 +241,13 @@ export function GrossisteMultiSelect({
     <div className="space-y-2">
       <Label>{label}</Label>
 
-      {/* Selected grossistes — one per row */}
+      {/* Selected grossistes — one per row, with a category picker each */}
       {value.length > 0 && (
         <div className="space-y-1.5">
           {value.map((g) => (
             <div
               key={g.id}
-              className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2"
+              className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2"
             >
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/10">
                 <Truck className="h-3.5 w-3.5 text-accent" />
@@ -153,6 +260,10 @@ export function GrossisteMultiSelect({
                   </p>
                 )}
               </div>
+              <CategorySelect
+                value={g.category}
+                onChange={(c) => setCategory(g.id, c)}
+              />
               <button
                 type="button"
                 onClick={() => remove(g.id)}
@@ -247,6 +358,10 @@ export function GrossisteMultiSelect({
             <div className="space-y-2">
               <Label>Wilaya *</Label>
               <WilayaSelect value={newWilaya} onValueChange={setNewWilaya} />
+            </div>
+            <div className="space-y-2">
+              <Label>Catégorie</Label>
+              <CategorySelect value={newCategory} onChange={setNewCategory} />
             </div>
           </div>
           <DialogFooter>

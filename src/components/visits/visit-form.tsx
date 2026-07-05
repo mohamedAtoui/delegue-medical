@@ -22,7 +22,8 @@ import { ProductSelect } from "@/components/shared/product-select";
 import { EngagementStars } from "@/components/shared/engagement-stars";
 import {
   GrossisteMultiSelect,
-  type GrossisteOption,
+  expandGrossisteSelection,
+  type SelectedGrossiste,
 } from "@/components/doctors/grossiste-combobox";
 import { toast } from "sonner";
 import { Send, Stethoscope, Pill, Truck, CalendarCheck, ChevronDown } from "lucide-react";
@@ -87,8 +88,7 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
   const [objective, setObjective] = useState("");
   const [compteRendu, setCompteRendu] = useState("");
   const [engagement, setEngagement] = useState<number | null>(null);
-  const [grossistesPharma, setGrossistesPharma] = useState<GrossisteOption[]>([]);
-  const [grossistesParaPharm, setGrossistesParaPharm] = useState<GrossisteOption[]>([]);
+  const [grossistes, setGrossistes] = useState<SelectedGrossiste[]>([]);
   const [answers, setAnswers] = useState<AnswersMap>({});
   const [questions, setQuestions] = useState<ProductQuestionWithProduct[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
@@ -107,8 +107,7 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
     setAnswers({});
     setProductId("");
     setEngagement(null);
-    setGrossistesPharma([]);
-    setGrossistesParaPharm([]);
+    setGrossistes([]);
   };
 
   // Reload questions when type or product changes.
@@ -220,20 +219,10 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
         })
         .filter((r): r is NonNullable<typeof r> => r !== null);
 
-      // Grossistes recorded at a pharmacy visit (one row each, per category).
+      // Grossistes recorded at a pharmacy visit (one row per category; a
+      // "both"-category grossiste expands to two rows).
       const grossistesPayload =
-        visitType === "pharmacien"
-          ? [
-              ...grossistesPharma.map((g) => ({
-                grossiste_id: g.id,
-                category: "pharma" as const,
-              })),
-              ...grossistesParaPharm.map((g) => ({
-                grossiste_id: g.id,
-                category: "para_pharm" as const,
-              })),
-            ]
-          : [];
+        visitType === "pharmacien" ? expandGrossisteSelection(grossistes) : [];
 
       const payload = {
         doctor_id: doctor.id,
@@ -290,8 +279,7 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
       setObjective("");
       setCompteRendu("");
       setEngagement(null);
-      setGrossistesPharma([]);
-      setGrossistesParaPharm([]);
+      setGrossistes([]);
       setAnswers({});
       setPlanNext(false);
       setNextDeadline("");
@@ -454,19 +442,11 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
         {/* Grossistes — pharmacien only, one per case, from a pre-set list */}
         {visitType === "pharmacien" && (
           <Card className="bg-muted/20">
-            <CardContent className="p-4 space-y-4">
-              <p className="text-sm font-semibold text-foreground/90">
-                Grossistes
-              </p>
+            <CardContent className="p-4">
               <GrossisteMultiSelect
-                label="Grossistes Pharma"
-                value={grossistesPharma}
-                onChange={setGrossistesPharma}
-              />
-              <GrossisteMultiSelect
-                label="Grossistes Para-Pharm"
-                value={grossistesParaPharm}
-                onChange={setGrossistesParaPharm}
+                label="Grossistes"
+                value={grossistes}
+                onChange={setGrossistes}
               />
             </CardContent>
           </Card>

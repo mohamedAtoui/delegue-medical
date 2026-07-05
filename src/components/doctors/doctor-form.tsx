@@ -27,7 +27,9 @@ import { Separator } from "@/components/ui/separator";
 import { EngagementStars } from "@/components/shared/engagement-stars";
 import {
   GrossisteMultiSelect,
-  type GrossisteOption,
+  collapseGrossisteLinks,
+  expandGrossisteSelection,
+  type SelectedGrossiste,
 } from "@/components/doctors/grossiste-combobox";
 import { toast } from "sonner";
 import { Stethoscope, Pill, Truck, Trash2, AlertTriangle } from "lucide-react";
@@ -69,10 +71,7 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
     potentiel: "",
     engagement: 0,
   });
-  const [grossistesPharma, setGrossistesPharma] = useState<GrossisteOption[]>([]);
-  const [grossistesParaPharm, setGrossistesParaPharm] = useState<
-    GrossisteOption[]
-  >([]);
+  const [grossistes, setGrossistes] = useState<SelectedGrossiste[]>([]);
 
   // Load the pharmacy's current grossiste links when editing. Prefer links
   // already attached to initialData; otherwise fetch them so a save doesn't
@@ -80,17 +79,7 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
   useEffect(() => {
     if (!initialData || initialData.doctor_type !== "pharmacien") return;
     const applyLinks = (links: DoctorGrossiste[]) => {
-      const toOption = (l: DoctorGrossiste): GrossisteOption => ({
-        id: l.grossiste_id,
-        last_name: l.grossiste?.last_name ?? "Grossiste",
-        wilaya: l.grossiste?.wilaya ?? "",
-      });
-      setGrossistesPharma(
-        links.filter((l) => l.category === "pharma").map(toOption)
-      );
-      setGrossistesParaPharm(
-        links.filter((l) => l.category === "para_pharm").map(toOption)
-      );
+      setGrossistes(collapseGrossisteLinks(links));
     };
     if (initialData.doctor_grossistes) {
       applyLinks(initialData.doctor_grossistes);
@@ -192,17 +181,9 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
           grossiste_pharma: isPharmacien ? (form.grossiste_pharma || null) : null,
           grossiste_para_pharm: isPharmacien ? (form.grossiste_para_pharm || null) : null,
           // New grossiste model: link rows synced server-side (pharmacien only).
+          // A "both"-category grossiste expands to two rows (pharma + para_pharm).
           grossistes: isPharmacien
-            ? [
-                ...grossistesPharma.map((g) => ({
-                  grossiste_id: g.id,
-                  category: "pharma" as const,
-                })),
-                ...grossistesParaPharm.map((g) => ({
-                  grossiste_id: g.id,
-                  category: "para_pharm" as const,
-                })),
-              ]
+            ? expandGrossisteSelection(grossistes)
             : undefined,
         }),
       });
@@ -447,20 +428,10 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
         </div>
       )}
 
-      {/* Pharmacien grossistes — from the shared directory, one per case */}
+      {/* Pharmacien grossistes — from the shared directory, one box; each
+          grossiste is tagged Pharma, Para-Pharm, or Les deux. */}
       {isPharmacien && (
-        <div className="space-y-4">
-          <GrossisteMultiSelect
-            label="Grossistes Pharma"
-            value={grossistesPharma}
-            onChange={setGrossistesPharma}
-          />
-          <GrossisteMultiSelect
-            label="Grossistes Para-Pharm"
-            value={grossistesParaPharm}
-            onChange={setGrossistesParaPharm}
-          />
-        </div>
+        <GrossisteMultiSelect value={grossistes} onChange={setGrossistes} />
       )}
 
       <div className="flex gap-2 justify-end pt-2">
