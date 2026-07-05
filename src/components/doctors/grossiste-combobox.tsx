@@ -291,7 +291,7 @@ export function GrossisteMultiSelect({
         </div>
 
         {open && search.length >= 2 && (
-          <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg">
+          <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-popover text-popover-foreground shadow-lg">
             {loading ? (
               <div className="px-4 py-3 text-sm text-muted-foreground">
                 Recherche...
