@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/utils/supabase/server";
 import { getOrCreateUser } from "@/lib/clerk/sync-user";
 import { fetchDoctors } from "@/lib/queries/doctors";
+import { getAssignedWilayas } from "@/lib/queries/territories";
 import { cleanGrossisteLinks } from "@/lib/grossistes";
 
 export async function GET(request: NextRequest) {
@@ -13,6 +14,13 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type");
+
+  // Délégués only see médecins/pharmaciens in their assigned wilayas.
+  const currentUser = await getOrCreateUser();
+  const restrictWilayas =
+    currentUser?.role === "delegue"
+      ? await getAssignedWilayas(currentUser.id)
+      : null;
 
   try {
     const result = await fetchDoctors({
@@ -25,6 +33,7 @@ export async function GET(request: NextRequest) {
           : null,
       page: parseInt(searchParams.get("page") || "1"),
       limit: parseInt(searchParams.get("limit") || "20"),
+      restrictWilayas,
     });
 
     return NextResponse.json(result);

@@ -51,9 +51,15 @@ type TypeFilter = "all" | DoctorType;
 interface MedecinsClientProps {
   role: UserRole;
   initialDoctors?: Doctor[];
+  /** A délégué's assigned wilayas; null for supervisors (no restriction). */
+  allowedWilayas?: string[] | null;
 }
 
-export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
+export function MedecinsClient({
+  role,
+  initialDoctors,
+  allowedWilayas,
+}: MedecinsClientProps) {
   const hasInitial = initialDoctors !== undefined;
   const [doctors, setDoctors] = useState<Doctor[]>(initialDoctors || []);
   const [search, setSearch] = useState("");
@@ -201,14 +207,18 @@ export function MedecinsClient({ role, initialDoctors }: MedecinsClientProps) {
             </Select>
           </div>
         )}
-        <div className="w-full sm:w-48">
-          <WilayaSelect
-            value={wilaya}
-            onValueChange={setWilaya}
-            placeholder="Toutes les wilayas"
-            showAll
-          />
-        </div>
+        {/* Territory-scoped délégués with a single wilaya don't need a filter. */}
+        {!(allowedWilayas && allowedWilayas.length <= 1) && (
+          <div className="w-full sm:w-48">
+            <WilayaSelect
+              value={wilaya}
+              onValueChange={setWilaya}
+              placeholder="Toutes les wilayas"
+              showAll
+              only={allowedWilayas ?? undefined}
+            />
+          </div>
+        )}
       </div>
 
       {/* Results */}

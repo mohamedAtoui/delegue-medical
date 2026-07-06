@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/utils/supabase/server";
 import { getOrCreateUser } from "@/lib/clerk/sync-user";
+import { getAssignedWilayas } from "@/lib/queries/territories";
 import { cleanGrossisteLinks } from "@/lib/grossistes";
 
 export async function GET(
@@ -24,6 +25,19 @@ export async function GET(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 404 });
+  }
+
+  // Territory scoping: a délégué may only open médecins/pharmaciens in their
+  // assigned wilayas. Grossistes are national and stay accessible.
+  const currentUser = await getOrCreateUser();
+  if (
+    currentUser?.role === "delegue" &&
+    data?.doctor_type !== "grossiste"
+  ) {
+    const allowed = await getAssignedWilayas(currentUser.id);
+    if (!allowed.includes(data?.wilaya)) {
+      return NextResponse.json({ error: "Accès restreint à votre région" }, { status: 403 });
+    }
   }
 
   // Attach the pharmacy's grossiste links (best-effort, non-fatal).

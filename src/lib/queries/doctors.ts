@@ -8,6 +8,13 @@ export interface DoctorQueryOptions {
   type?: "medecin" | "pharmacien" | "grossiste" | null;
   page?: number;
   limit?: number;
+  /**
+   * Territory scoping. When a non-null array is passed (a délégué's assigned
+   * wilayas), médecins and pharmaciens are restricted to those wilayas. null
+   * means no restriction (supervisors). Grossistes are national wholesalers, so
+   * a grossiste-only query is never restricted.
+   */
+  restrictWilayas?: string[] | null;
 }
 
 export interface DoctorsResult {
@@ -31,6 +38,7 @@ export async function fetchDoctors(
     type,
     page = 1,
     limit = 20,
+    restrictWilayas = null,
   } = opts;
 
   const offset = (page - 1) * limit;
@@ -47,6 +55,11 @@ export async function fetchDoctors(
   if (specialty) query = query.eq("specialty", specialty);
   if (type === "medecin" || type === "pharmacien" || type === "grossiste") {
     query = query.eq("doctor_type", type);
+  }
+  // Territory scoping for délégués. Grossistes are national, so we never
+  // restrict a grossiste-only query.
+  if (restrictWilayas && type !== "grossiste") {
+    query = query.in("wilaya", restrictWilayas);
   }
 
   const { data: doctors, count, error } = await query
