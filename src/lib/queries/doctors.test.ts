@@ -12,6 +12,7 @@ interface InCall {
 }
 const inCalls: InCall[] = [];
 const eqCalls: InCall[] = [];
+const orCalls: string[] = [];
 
 function builder() {
   const b: Record<string, unknown> = {};
@@ -20,6 +21,7 @@ function builder() {
     b[m] = vi.fn((arg?: unknown, arg2?: unknown) => {
       if (m === "in") inCalls.push({ column: arg as string, values: arg2 });
       if (m === "eq") eqCalls.push({ column: arg as string, values: arg2 });
+      if (m === "or") orCalls.push(arg as string);
       return b;
     });
   }
@@ -35,6 +37,7 @@ vi.mock("@/utils/supabase/server", () => ({
 beforeEach(() => {
   inCalls.length = 0;
   eqCalls.length = 0;
+  orCalls.length = 0;
 });
 
 describe("fetchDoctors territory scoping", () => {
@@ -59,5 +62,17 @@ describe("fetchDoctors territory scoping", () => {
     await fetchDoctors({ type: "medecin", restrictWilayas: null });
 
     expect(inCalls.find((c) => c.column === "wilaya")).toBeUndefined();
+  });
+
+  it("keeps ALL grossistes visible in the combined view (type null)", async () => {
+    const { fetchDoctors } = await import("./doctors");
+    await fetchDoctors({ type: null, restrictWilayas: ["Alger"] });
+
+    // No hard wilaya filter that would hide out-of-region grossistes...
+    expect(inCalls.find((c) => c.column === "wilaya")).toBeUndefined();
+    // ...instead an OR that always includes grossistes.
+    const territoryOr = orCalls.find((o) => o.includes("doctor_type.eq.grossiste"));
+    expect(territoryOr).toBeTruthy();
+    expect(territoryOr).toContain('wilaya.in.("Alger")');
   });
 });

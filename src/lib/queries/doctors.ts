@@ -56,10 +56,20 @@ export async function fetchDoctors(
   if (type === "medecin" || type === "pharmacien" || type === "grossiste") {
     query = query.eq("doctor_type", type);
   }
-  // Territory scoping for délégués. Grossistes are national, so we never
-  // restrict a grossiste-only query.
-  if (restrictWilayas && type !== "grossiste") {
-    query = query.in("wilaya", restrictWilayas);
+  // Territory scoping for délégués: médecins & pharmaciens are limited to the
+  // délégué's wilayas, but grossistes are national and must ALWAYS be visible —
+  // no exception, including in the combined "Tous" view.
+  if (restrictWilayas) {
+    // Sentinel avoids an empty in-list; délégués always have ≥1 wilaya anyway.
+    const names = restrictWilayas.length > 0 ? restrictWilayas : ["__none__"];
+    if (type === "medecin" || type === "pharmacien") {
+      query = query.in("wilaya", names);
+    } else if (type !== "grossiste") {
+      // Combined view: keep every grossiste, restrict only médecins/pharmaciens.
+      const list = names.map((w) => `"${w.replace(/"/g, '\\"')}"`).join(",");
+      query = query.or(`doctor_type.eq.grossiste,wilaya.in.(${list})`);
+    }
+    // type === "grossiste": no wilaya restriction at all.
   }
 
   const { data: doctors, count, error } = await query
