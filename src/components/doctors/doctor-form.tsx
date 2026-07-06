@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { WilayaSelect } from "@/components/shared/wilaya-select";
+import { CommuneCombobox } from "@/components/shared/commune-combobox";
 import { SPECIALTIES } from "@/lib/constants/specialties";
 import {
   AlertDialog,
@@ -304,18 +305,21 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
         <Label>Wilaya *</Label>
         <WilayaSelect
           value={form.wilaya}
-          onValueChange={(v) => setForm({ ...form, wilaya: v })}
+          onValueChange={(v) =>
+            // Reset commune when the wilaya changes — its list is wilaya-specific.
+            setForm({ ...form, wilaya: v, commune: "" })
+          }
         />
       </div>
 
-      {/* Commune */}
+      {/* Commune — suggestions come from the chosen wilaya */}
       <div className="space-y-2">
         <Label htmlFor="commune">Commune</Label>
-        <Input
+        <CommuneCombobox
           id="commune"
+          wilaya={form.wilaya}
           value={form.commune}
-          onChange={(e) => setForm({ ...form, commune: e.target.value })}
-          placeholder="Ex: Hydra, Bab El Oued..."
+          onChange={(v) => setForm({ ...form, commune: v })}
         />
       </div>
 

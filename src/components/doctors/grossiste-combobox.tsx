@@ -13,6 +13,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { WilayaSelect } from "@/components/shared/wilaya-select";
+import { CommuneCombobox } from "@/components/shared/commune-combobox";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Doctor, GrossisteCategory } from "@/types";
@@ -142,6 +143,7 @@ export function GrossisteMultiSelect({
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newWilaya, setNewWilaya] = useState("");
+  const [newCommune, setNewCommune] = useState("");
   const [newCategory, setNewCategory] = useState<SelectedCategory>("both");
   const [creating, setCreating] = useState(false);
 
@@ -187,6 +189,7 @@ export function GrossisteMultiSelect({
   const openCreate = () => {
     setNewName(search.trim());
     setNewWilaya("");
+    setNewCommune("");
     setNewCategory("both");
     setShowCreate(true);
     setOpen(false);
@@ -211,6 +214,7 @@ export function GrossisteMultiSelect({
           last_name: newName.trim(),
           doctor_type: "grossiste",
           wilaya: newWilaya,
+          commune: newCommune.trim() || null,
         }),
       });
       if (!res.ok) {
@@ -226,6 +230,7 @@ export function GrossisteMultiSelect({
       setShowCreate(false);
       setNewName("");
       setNewWilaya("");
+      setNewCommune("");
       setNewCategory("both");
       setSearch("");
     } catch (e) {
@@ -357,7 +362,21 @@ export function GrossisteMultiSelect({
             </div>
             <div className="space-y-2">
               <Label>Wilaya *</Label>
-              <WilayaSelect value={newWilaya} onValueChange={setNewWilaya} />
+              <WilayaSelect
+                value={newWilaya}
+                onValueChange={(v) => {
+                  setNewWilaya(v);
+                  setNewCommune("");
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Commune</Label>
+              <CommuneCombobox
+                wilaya={newWilaya}
+                value={newCommune}
+                onChange={setNewCommune}
+              />
             </div>
             <div className="space-y-2">
               <Label>Catégorie</Label>
