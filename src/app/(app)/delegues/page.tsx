@@ -31,7 +31,6 @@ import {
   ClipboardList,
   MapPin,
   Phone,
-  Search,
   Calendar,
   Stethoscope,
   Pill,
@@ -42,6 +41,8 @@ import {
   CalendarCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SearchInput } from "@/components/shared/search-input";
+import { FilterTabs } from "@/components/shared/filter-tabs";
 import type { User as UserType, VisitWithDetails, DoctorType, Potentiel } from "@/types";
 
 type GroupBy = "doctor" | "date" | "wilaya";
@@ -704,31 +705,15 @@ export default function DeleguesPage() {
               {viewTab === "visites" && (<>
 
               {/* Type tabs */}
-              <div className="grid grid-cols-3 gap-2 p-1 bg-muted/40 rounded-lg">
-                {([
-                  { key: "", label: "Toutes", icon: Users },
-                  { key: "medecin", label: "Médecins", icon: Stethoscope },
-                  { key: "pharmacien", label: "Pharmaciens", icon: Pill },
-                ] as { key: TypeFilter; label: string; icon: typeof Users }[]).map((tab) => {
-                  const Icon = tab.icon;
-                  const active = typeFilter === tab.key;
-                  return (
-                    <button
-                      key={tab.key}
-                      onClick={() => setTypeFilter(tab.key)}
-                      className={cn(
-                        "flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-all cursor-pointer",
-                        active
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      <Icon className="h-4 w-4" />
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
+              <FilterTabs<TypeFilter>
+                value={typeFilter}
+                onChange={setTypeFilter}
+                options={[
+                  { value: "", label: "Toutes", icon: Users },
+                  { value: "medecin", label: "Médecins", icon: Stethoscope },
+                  { value: "pharmacien", label: "Pharmaciens", icon: Pill },
+                ]}
+              />
 
               {/* Filter bar */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -764,15 +749,12 @@ export default function DeleguesPage() {
                   className="w-full sm:flex-1"
                 />
 
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Chercher un médecin/pharmacien..."
-                    value={searchDoctor}
-                    onChange={(e) => setSearchDoctor(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
+                <SearchInput
+                  value={searchDoctor}
+                  onChange={setSearchDoctor}
+                  placeholder="Chercher un médecin/pharmacien..."
+                  className="flex-1"
+                />
               </div>
 
               {/* Results */}

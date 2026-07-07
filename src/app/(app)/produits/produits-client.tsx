@@ -6,11 +6,11 @@ import {
   Pencil,
   Trash2,
   Package,
-  Search,
   AlertTriangle,
   CheckCircle2,
   ListChecks,
 } from "lucide-react";
+import { SearchInput } from "@/components/shared/search-input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -232,14 +232,17 @@ export function ProduitsClient() {
       </div>
 
       {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
+      <div className="space-y-2">
+        <SearchInput
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={setSearch}
           placeholder="Rechercher par nom, référence, laboratoire…"
-          className="pl-9"
         />
+        <p className="text-sm text-muted-foreground">
+          {loading
+            ? "Chargement…"
+            : `${filtered.length} produit${filtered.length !== 1 ? "s" : ""}`}
+        </p>
       </div>
 
       {/* List */}

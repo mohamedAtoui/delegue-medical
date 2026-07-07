@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Search,
   Plus,
   Stethoscope,
   Pill,
@@ -15,10 +14,10 @@ import {
   Navigation,
   Mail,
   Truck,
+  X,
 } from "lucide-react";
 import { EngagementStars } from "@/components/shared/engagement-stars";
 import Link from "next/link";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +37,8 @@ import {
 import { DoctorForm } from "@/components/doctors/doctor-form";
 import { VisitEntry } from "@/components/visits/visit-entry";
 import { WilayaSelect } from "@/components/shared/wilaya-select";
+import { SearchInput } from "@/components/shared/search-input";
+import { FilterTabs } from "@/components/shared/filter-tabs";
 import { MedicalLoader } from "@/components/ui/medical-loader";
 import { SPECIALTIES } from "@/lib/constants/specialties";
 import { cn } from "@/lib/utils";
@@ -85,6 +86,9 @@ export function MedecinsClient({
       if (wilaya) params.set("wilaya", wilaya);
       if (specialty && specialty !== "all") params.set("specialty", specialty);
       if (typeFilter !== "all") params.set("type", typeFilter);
+      // No pagination UI on this page — show the whole (territory-scoped) list
+      // so the filters let a rep actually see everything.
+      params.set("limit", "500");
 
       const res = await fetch(`/api/doctors?${params}`);
       const data = await res.json();
@@ -122,6 +126,15 @@ export function MedecinsClient({
 
   const expandedDoctor = expandedId ? doctors.find((d) => d.id === expandedId) || null : null;
 
+  const hasActiveFilters =
+    search !== "" || wilaya !== "" || specialty !== "" || typeFilter !== "all";
+  const resetFilters = () => {
+    setSearch("");
+    setWilaya("");
+    setSpecialty("");
+    setTypeFilter("all");
+  };
+
   const handleDoctorDeleted = () => {
     if (expandedId) {
       setDoctors((prev) => prev.filter((d) => d.id !== expandedId));
@@ -149,48 +162,29 @@ export function MedecinsClient({
       </div>
 
       {/* Type tabs */}
-      <div className="grid grid-cols-2 gap-2 p-1 bg-muted/40 rounded-lg sm:grid-cols-4">
-        {([
-          { key: "all", label: "Tous", icon: Users },
-          { key: "medecin", label: "Médecins", icon: Stethoscope },
-          { key: "pharmacien", label: "Pharmaciens", icon: Pill },
-          { key: "grossiste", label: "Grossistes", icon: Truck },
-        ] as { key: TypeFilter; label: string; icon: typeof Users }[]).map((tab) => {
-          const Icon = tab.icon;
-          const active = typeFilter === tab.key;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => {
-                setTypeFilter(tab.key);
-                // Only médecins have a specialty — clear it for the others.
-                if (tab.key !== "medecin" && tab.key !== "all") setSpecialty("");
-              }}
-              className={cn(
-                "flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-all cursor-pointer",
-                active
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      <FilterTabs<TypeFilter>
+        value={typeFilter}
+        onChange={(v) => {
+          setTypeFilter(v);
+          // Only médecins have a specialty — clear it for the others.
+          if (v !== "medecin" && v !== "all") setSpecialty("");
+        }}
+        options={[
+          { value: "all", label: "Tous", icon: Users },
+          { value: "medecin", label: "Médecins", icon: Stethoscope },
+          { value: "pharmacien", label: "Pharmaciens", icon: Pill },
+          { value: "grossiste", label: "Grossistes", icon: Truck },
+        ]}
+      />
 
       {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Rechercher par nom..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Rechercher par nom..."
+          className="flex-1"
+        />
         {(typeFilter === "all" || typeFilter === "medecin") && (
           <div className="w-full sm:w-48">
             <Select value={specialty} onValueChange={(v) => setSpecialty(v ?? "")}>
@@ -218,6 +212,26 @@ export function MedecinsClient({
               only={allowedWilayas ?? undefined}
             />
           </div>
+        )}
+      </div>
+
+      {/* Result count + reset */}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          {loading
+            ? "Chargement…"
+            : `${doctors.length} résultat${doctors.length !== 1 ? "s" : ""}`}
+        </p>
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={resetFilters}
+            className="cursor-pointer text-muted-foreground"
+          >
+            <X className="mr-1.5 h-4 w-4" />
+            Réinitialiser
+          </Button>
         )}
       </div>
 

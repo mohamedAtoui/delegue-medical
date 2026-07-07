@@ -9,11 +9,9 @@ import {
   Pill,
   Truck,
   Users,
-  Search,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -23,6 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { WilayaSelect } from "@/components/shared/wilaya-select";
+import { SearchInput } from "@/components/shared/search-input";
+import { FilterTabs } from "@/components/shared/filter-tabs";
 import {
   DateRangeFilter,
   resolveDateRange,
@@ -208,54 +208,23 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
       {/* Filters */}
       <div className="space-y-3">
         {/* Type tabs */}
-        <div className="grid grid-cols-2 gap-2 p-1 bg-muted/40 rounded-lg sm:grid-cols-4">
-          {(
-            [
-              { key: "", label: "Toutes", icon: Users },
-              { key: "medecin", label: "Médecins", icon: Stethoscope },
-              { key: "pharmacien", label: "Pharmaciens", icon: Pill },
-              { key: "grossiste", label: "Grossistes", icon: Truck },
-            ] as { key: TypeFilter; label: string; icon: typeof Users }[]
-          ).map((tab) => {
-            const Icon = tab.icon;
-            const active = typeFilter === tab.key;
-            return (
-              <button
-                key={tab.key || "all"}
-                onClick={() => setTypeFilter(tab.key)}
-                className={cn(
-                  "flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-all cursor-pointer",
-                  active
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+        <FilterTabs<TypeFilter>
+          value={typeFilter}
+          onChange={setTypeFilter}
+          options={[
+            { value: "", label: "Toutes", icon: Users },
+            { value: "medecin", label: "Médecins", icon: Stethoscope },
+            { value: "pharmacien", label: "Pharmaciens", icon: Pill },
+            { value: "grossiste", label: "Grossistes", icon: Truck },
+          ]}
+        />
 
         {/* Search bar */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Rechercher par nom du médecin ou pharmacien…"
-            className="pl-9 pr-9"
-          />
-          {searchInput && (
-            <button
-              type="button"
-              onClick={() => setSearchInput("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
+        <SearchInput
+          value={searchInput}
+          onChange={setSearchInput}
+          placeholder="Rechercher par nom du médecin ou pharmacien…"
+        />
 
         {/* Filter row */}
         <div className="space-y-2">

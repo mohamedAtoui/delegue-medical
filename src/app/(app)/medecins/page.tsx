@@ -14,7 +14,7 @@ export default async function MedecinsPage() {
 
   // Hoist initial fetch to the server — page renders with doctors already
   // present, no "Aucun résultat" flash.
-  const initial = await fetchDoctors({ page: 1, limit: 20, restrictWilayas });
+  const initial = await fetchDoctors({ page: 1, limit: 500, restrictWilayas });
 
   return (
     <MedecinsClient
