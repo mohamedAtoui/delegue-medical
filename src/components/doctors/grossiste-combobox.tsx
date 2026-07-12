@@ -344,6 +344,17 @@ export function GrossisteMultiSelect({
         )}
       </div>
 
+      {/* Explicit add button — create a brand-new grossiste in one tap,
+          without having to type in the search first. */}
+      <button
+        type="button"
+        onClick={openCreate}
+        className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border py-2 text-sm font-medium text-primary transition-colors hover:bg-accent/10 cursor-pointer"
+      >
+        <Plus className="h-4 w-4" />
+        Ajouter un nouveau grossiste
+      </button>
+
       {/* Quick-add dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="sm:max-w-md">
