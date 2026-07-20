@@ -14,6 +14,7 @@ interface VisitHistoryProps {
   from?: string;
   to?: string;
   wilaya?: string;
+  commune?: string;
   userId?: string;
   search?: string;
   initialVisits?: VisitWithDetails[];
@@ -69,6 +70,7 @@ export function VisitHistory({
   from,
   to,
   wilaya,
+  commune,
   userId,
   search,
   initialVisits,
@@ -98,6 +100,7 @@ export function VisitHistory({
       if (from) url.searchParams.set("from", from);
       if (to) url.searchParams.set("to", to);
       if (wilaya) url.searchParams.set("wilaya", wilaya);
+      if (commune) url.searchParams.set("commune", commune);
       if (userId) url.searchParams.set("user_id", userId);
       if (search) url.searchParams.set("search", search);
 
@@ -109,7 +112,7 @@ export function VisitHistory({
     } finally {
       setLoading(false);
     }
-  }, [fetchUrl, showUser, page, typeFilter, from, to, wilaya, userId, search]);
+  }, [fetchUrl, showUser, page, typeFilter, from, to, wilaya, commune, userId, search]);
 
   useEffect(() => {
     if (skipNext.current) {
