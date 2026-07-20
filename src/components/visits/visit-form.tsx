@@ -22,7 +22,7 @@ import { ProductSelect } from "@/components/shared/product-select";
 import { EngagementStars } from "@/components/shared/engagement-stars";
 import {
   GrossisteMultiSelect,
-  type GrossisteOption,
+  type GrossisteSelection,
 } from "@/components/doctors/grossiste-combobox";
 import { toast } from "sonner";
 import { Send, Stethoscope, Pill, Truck, CalendarCheck, ChevronDown } from "lucide-react";
@@ -87,8 +87,7 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
   const [objective, setObjective] = useState("");
   const [compteRendu, setCompteRendu] = useState("");
   const [engagement, setEngagement] = useState<number | null>(null);
-  const [grossistesPharma, setGrossistesPharma] = useState<GrossisteOption[]>([]);
-  const [grossistesParaPharm, setGrossistesParaPharm] = useState<GrossisteOption[]>([]);
+  const [grossistes, setGrossistes] = useState<GrossisteSelection[]>([]);
   const [answers, setAnswers] = useState<AnswersMap>({});
   const [questions, setQuestions] = useState<ProductQuestionWithProduct[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
@@ -107,8 +106,7 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
     setAnswers({});
     setProductId("");
     setEngagement(null);
-    setGrossistesPharma([]);
-    setGrossistesParaPharm([]);
+    setGrossistes([]);
   };
 
   // Reload questions when type or product changes.
@@ -189,7 +187,11 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
         ((q.input_type === "yes_no" && a.value_boolean !== null && a.value_boolean !== undefined) ||
           (q.input_type === "short_text" && !!a.value_text?.trim()) ||
           (q.input_type === "textarea" && !!a.value_text?.trim()) ||
-          (q.input_type === "number" && a.value_number !== undefined && a.value_number !== ""));
+          // A 0 quantity counts as "left empty" (see product number handling).
+          (q.input_type === "number" &&
+            a.value_number !== undefined &&
+            a.value_number !== "" &&
+            Number(a.value_number) !== 0));
       if (!filled) {
         toast.error(`Question obligatoire : ${q.label}`);
         return;
@@ -212,6 +214,9 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
             if (a.value_number === undefined || a.value_number === "") return null;
             const n = Number(a.value_number);
             if (Number.isNaN(n)) return null;
+            // Treat 0 as "left empty" so an unfilled quantity isn't recorded
+            // as a real 0 in the relevé par produit.
+            if (n === 0) return null;
             return { question_id: q.id, value_number: n };
           }
           const text = a.value_text?.trim();
@@ -220,19 +225,16 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
         })
         .filter((r): r is NonNullable<typeof r> => r !== null);
 
-      // Grossistes recorded at a pharmacy visit (one row each, per category).
+      // Grossistes recorded at a pharmacy visit — one row per (grossiste,
+      // category). Grossistes with no category chosen are not recorded.
       const grossistesPayload =
         visitType === "pharmacien"
-          ? [
-              ...grossistesPharma.map((g) => ({
+          ? grossistes.flatMap((g) =>
+              g.categories.map((category) => ({
                 grossiste_id: g.id,
-                category: "pharma" as const,
-              })),
-              ...grossistesParaPharm.map((g) => ({
-                grossiste_id: g.id,
-                category: "para_pharm" as const,
-              })),
-            ]
+                category,
+              }))
+            )
           : [];
 
       const payload = {
@@ -290,8 +292,7 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
       setObjective("");
       setCompteRendu("");
       setEngagement(null);
-      setGrossistesPharma([]);
-      setGrossistesParaPharm([]);
+      setGrossistes([]);
       setAnswers({});
       setPlanNext(false);
       setNextDeadline("");
@@ -451,22 +452,14 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
           </div>
         )}
 
-        {/* Grossistes — pharmacien only, one per case, from a pre-set list */}
+        {/* Grossistes — pharmacien only, one per case with per-grossiste
+            category (Pharma / Para-pharm), from a pre-set list */}
         {visitType === "pharmacien" && (
           <Card className="bg-muted/20">
-            <CardContent className="p-4 space-y-4">
-              <p className="text-sm font-semibold text-foreground/90">
-                Grossistes
-              </p>
+            <CardContent className="p-4">
               <GrossisteMultiSelect
-                label="Grossistes Pharma"
-                value={grossistesPharma}
-                onChange={setGrossistesPharma}
-              />
-              <GrossisteMultiSelect
-                label="Grossistes Para-Pharm"
-                value={grossistesParaPharm}
-                onChange={setGrossistesParaPharm}
+                value={grossistes}
+                onChange={setGrossistes}
               />
             </CardContent>
           </Card>
@@ -674,7 +667,7 @@ function QuestionInput({ question, answer, onChange }: QuestionInputProps) {
           min="0"
           value={answer?.value_number ?? ""}
           onChange={(e) => onChange({ value_number: e.target.value })}
-          placeholder="0"
+          placeholder="Laisser vide si non relevé"
         />
       </div>
     );

@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { WilayaSelect } from "@/components/shared/wilaya-select";
+import { CommuneFilterSelect } from "@/components/shared/commune-filter-select";
 import {
   DateRangeFilter,
   resolveDateRange,
@@ -50,6 +51,7 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
   const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: "" });
   const [wilayaFilter, setWilayaFilter] = useState("");
+  const [communeFilter, setCommuneFilter] = useState("");
   const [delegueFilter, setDelegueFilter] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -88,6 +90,7 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
     (typeFilter ? 1 : 0) +
     (dateRange.preset ? 1 : 0) +
     (wilayaFilter ? 1 : 0) +
+    (communeFilter ? 1 : 0) +
     (delegueFilter ? 1 : 0) +
     (search ? 1 : 0);
 
@@ -95,6 +98,7 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
     setTypeFilter("");
     setDateRange({ preset: "" });
     setWilayaFilter("");
+    setCommuneFilter("");
     setDelegueFilter("");
     setSearchInput("");
   };
@@ -261,13 +265,23 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
         <div className="space-y-2">
           <DateRangeFilter value={dateRange} onChange={setDateRange} />
 
-          {isSupervisor && (
-            <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
+          {isSupervisor ? (
+            <div className="grid gap-2 grid-cols-1 sm:grid-cols-3">
               <WilayaSelect
                 value={wilayaFilter}
-                onValueChange={setWilayaFilter}
+                onValueChange={(v) => {
+                  setWilayaFilter(v);
+                  // Communes are scoped to the wilaya — drop a stale selection.
+                  setCommuneFilter("");
+                }}
                 placeholder="Toutes les wilayas"
                 showAll
+              />
+
+              <CommuneFilterSelect
+                value={communeFilter}
+                onValueChange={setCommuneFilter}
+                wilaya={wilayaFilter || undefined}
               />
 
               <Select
@@ -286,6 +300,11 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
                 </SelectContent>
               </Select>
             </div>
+          ) : (
+            <CommuneFilterSelect
+              value={communeFilter}
+              onValueChange={setCommuneFilter}
+            />
           )}
         </div>
 
@@ -315,6 +334,7 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
         from={fromIso}
         to={toIso}
         wilaya={wilayaFilter || undefined}
+        commune={communeFilter || undefined}
         userId={delegueFilter || undefined}
         search={search || undefined}
         initialVisits={initialVisits}

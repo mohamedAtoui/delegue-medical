@@ -13,31 +13,44 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { WilayaSelect } from "@/components/shared/wilaya-select";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { Doctor } from "@/types";
+import type { Doctor, GrossisteCategory } from "@/types";
 
-export type GrossisteOption = Pick<Doctor, "id" | "last_name" | "wilaya">;
-
-interface GrossisteMultiSelectProps {
-  label: string;
-  value: GrossisteOption[];
-  onChange: (next: GrossisteOption[]) => void;
+/** A picked grossiste with the categories the user assigned to it. */
+export interface GrossisteSelection {
+  id: string;
+  last_name: string;
+  wilaya: string;
+  categories: GrossisteCategory[];
 }
 
+interface GrossisteMultiSelectProps {
+  label?: string;
+  value: GrossisteSelection[];
+  onChange: (next: GrossisteSelection[]) => void;
+}
+
+const CATEGORY_LABELS: { key: GrossisteCategory; label: string }[] = [
+  { key: "pharma", label: "Pharma" },
+  { key: "para_pharm", label: "Para-pharm" },
+];
+
 /**
- * "One grossiste per row" picker over the grossiste directory
- * (doctor_type='grossiste'), with an inline quick-add for a brand-new
- * grossiste (name + wilaya). Used in the pharmacy visit form and the doctor
- * form. Selecting a grossiste that isn't in the list yet is a two-step: type
- * the name, then "Créer".
+ * Picks grossistes from the shared directory (doctor_type='grossiste'), one per
+ * row, with an inline quick-add. Each picked grossiste carries its own
+ * categories (Pharma / Para-pharm) — none assigned by default, and a grossiste
+ * can be both. Only grossistes with at least one category are persisted.
  */
 export function GrossisteMultiSelect({
-  label,
+  label = "Grossistes",
   value,
   onChange,
 }: GrossisteMultiSelectProps) {
   const [search, setSearch] = useState("");
-  const [results, setResults] = useState<GrossisteOption[]>([]);
+  const [results, setResults] = useState<
+    Pick<Doctor, "id" | "last_name" | "wilaya">[]
+  >([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -74,13 +87,34 @@ export function GrossisteMultiSelect({
 
   const selectedIds = new Set(value.map((g) => g.id));
 
-  const add = (g: GrossisteOption) => {
-    if (!selectedIds.has(g.id)) onChange([...value, g]);
+  const add = (g: Pick<Doctor, "id" | "last_name" | "wilaya">) => {
+    if (!selectedIds.has(g.id)) {
+      onChange([
+        ...value,
+        { id: g.id, last_name: g.last_name, wilaya: g.wilaya, categories: [] },
+      ]);
+    }
     setSearch("");
     setOpen(false);
     setResults([]);
   };
+
   const remove = (id: string) => onChange(value.filter((g) => g.id !== id));
+
+  const toggleCategory = (id: string, cat: GrossisteCategory) => {
+    onChange(
+      value.map((g) =>
+        g.id !== id
+          ? g
+          : {
+              ...g,
+              categories: g.categories.includes(cat)
+                ? g.categories.filter((c) => c !== cat)
+                : [...g.categories, cat],
+            }
+      )
+    );
+  };
 
   const openCreate = () => {
     setNewName(search.trim());
@@ -134,7 +168,6 @@ export function GrossisteMultiSelect({
     <div className="space-y-2">
       <Label>{label}</Label>
 
-      {/* Selected grossistes — one per row */}
       {value.length > 0 && (
         <div className="space-y-1.5">
           {value.map((g) => (
@@ -153,6 +186,27 @@ export function GrossisteMultiSelect({
                   </p>
                 )}
               </div>
+              {/* Per-grossiste category toggles — none preset, both allowed */}
+              <div className="flex shrink-0 gap-1">
+                {CATEGORY_LABELS.map((c) => {
+                  const active = g.categories.includes(c.key);
+                  return (
+                    <button
+                      key={c.key}
+                      type="button"
+                      onClick={() => toggleCategory(g.id, c.key)}
+                      className={cn(
+                        "rounded-full border px-2 py-0.5 text-xs transition-colors cursor-pointer",
+                        active
+                          ? "border-accent bg-accent/10 text-accent font-medium"
+                          : "border-border text-muted-foreground hover:border-accent/40"
+                      )}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
               <button
                 type="button"
                 onClick={() => remove(g.id)}
@@ -166,7 +220,6 @@ export function GrossisteMultiSelect({
         </div>
       )}
 
-      {/* Search + add */}
       <div className="relative">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -228,7 +281,6 @@ export function GrossisteMultiSelect({
         )}
       </div>
 
-      {/* Quick-add dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
