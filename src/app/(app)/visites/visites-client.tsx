@@ -30,6 +30,8 @@ import {
 } from "@/components/shared/date-range-filter";
 import { VisitForm } from "@/components/visits/visit-form";
 import { VisitHistory } from "@/components/visits/visit-history";
+import { useVisitSync } from "@/lib/offline/use-visit-sync";
+import { CloudOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DoctorType, User, UserRole, VisitWithDetails } from "@/types";
 
@@ -55,6 +57,11 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
   const [search, setSearch] = useState("");
   const [reps, setReps] = useState<User[]>([]);
   const [me, setMe] = useState<User | null>(null);
+
+  // Offline queue: drains automatically on reconnect; refresh the list on sync.
+  const { pending: pendingVisits } = useVisitSync(() =>
+    setRefreshKey((k) => k + 1)
+  );
 
   // Debounce search
   useEffect(() => {
@@ -151,6 +158,17 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
           <span className="sm:hidden">Nouveau</span>
         </Button>
       </div>
+
+      {/* Offline queue indicator */}
+      {pendingVisits > 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <CloudOff className="h-4 w-4 shrink-0" />
+          <span>
+            {pendingVisits} visite{pendingVisits > 1 ? "s" : ""} en attente de
+            synchronisation — envoi automatique au retour du réseau.
+          </span>
+        </div>
+      )}
 
       {/* Daily goal progress (delegue only, when goal is set) */}
       {!isSupervisor && me && me.daily_visit_goal && me.daily_visit_goal > 0 && (

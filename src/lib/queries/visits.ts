@@ -141,6 +141,25 @@ export async function fetchVisits(opts: VisitQueryOptions): Promise<VisitsResult
           byVisit.get(v.id) || [];
       });
     }
+
+    // Stage timings — fetched separately so a missing table (before migration
+    // 024 is applied) or a relationship hiccup can never break the visits list.
+    const { data: vt } = await supabase
+      .from("visit_timings")
+      .select("*")
+      .in("visit_id", visitIds);
+
+    if (vt && vt.length > 0) {
+      const byVisit = new Map<string, unknown[]>();
+      vt.forEach((row) => {
+        const list = byVisit.get(row.visit_id) || [];
+        list.push(row);
+        byVisit.set(row.visit_id, list);
+      });
+      data.forEach((v) => {
+        (v as Record<string, unknown>).visit_timings = byVisit.get(v.id) || [];
+      });
+    }
   }
 
   return {

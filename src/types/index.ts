@@ -166,6 +166,42 @@ export interface VisitWithDetails extends Visit {
   doctor_visit_count?: number;
   visit_answers?: VisitAnswer[];
   visit_grossistes?: VisitGrossiste[];
+  visit_timings?: VisitTiming[];
+}
+
+/** The three optional timed stages of a médecin visit. */
+export type TimingStage = "trajet" | "attente" | "visite";
+/** How a duration was captured: chronometer (auto) or typed (manual). */
+export type TimingMode = "auto" | "manual";
+
+export interface VisitTiming {
+  id?: string;
+  visit_id?: string;
+  stage: TimingStage;
+  /** Set only for chronometer (auto) captures. */
+  started_at: string | null;
+  ended_at: string | null;
+  duration_seconds: number;
+  mode: TimingMode;
+  created_at?: string;
+}
+
+/** A superviseur correction to a visit timing, kept for audit. */
+export interface VisitTimingAudit {
+  id: string;
+  visit_timing_id: string | null;
+  visit_id: string;
+  stage: TimingStage;
+  edited_by: string | null;
+  old_duration_seconds: number | null;
+  new_duration_seconds: number | null;
+  old_started_at: string | null;
+  new_started_at: string | null;
+  old_ended_at: string | null;
+  new_ended_at: string | null;
+  reason: string | null;
+  created_at: string;
+  editor?: Pick<User, "id" | "first_name" | "last_name">;
 }
 
 /** A grossiste linked to a pharmacy (directory-level, current state). */
