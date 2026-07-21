@@ -11,6 +11,7 @@ export interface VisitQueryOptions {
   to?: string | null;
   type?: "medecin" | "pharmacien" | "grossiste" | null;
   wilaya?: string | null;
+  commune?: string | null;
   search?: string | null;
   page?: number;
   limit?: number;
@@ -37,6 +38,7 @@ export async function fetchVisits(opts: VisitQueryOptions): Promise<VisitsResult
     to,
     type,
     wilaya,
+    commune,
     search,
     page = 1,
     limit = 50,
@@ -47,7 +49,9 @@ export async function fetchVisits(opts: VisitQueryOptions): Promise<VisitsResult
 
   // The visit_grossistes junction gives PostgREST a second visits→doctors path,
   // so the doctor embed MUST name the direct FK or it errors (PGRST201).
-  const needsInnerDoctor = !!wilaya || !!search;
+  // Filtering on an embedded doctor column requires an inner join, otherwise
+  // PostgREST keeps the visit row with a null doctor instead of excluding it.
+  const needsInnerDoctor = !!wilaya || !!commune || !!search;
   const doctorSelect = needsInnerDoctor
     ? "doctor:doctors!visits_doctor_id_fkey!inner(*)"
     : "doctor:doctors!visits_doctor_id_fkey(*)";
@@ -74,6 +78,7 @@ export async function fetchVisits(opts: VisitQueryOptions): Promise<VisitsResult
     query = query.eq("visit_type", type);
   }
   if (wilaya) query = query.eq("doctor.wilaya", wilaya);
+  if (commune) query = query.eq("doctor.commune", commune);
   if (search) {
     const like = `%${search}%`;
     query = query.or(`last_name.ilike.${like},first_name.ilike.${like}`, {
