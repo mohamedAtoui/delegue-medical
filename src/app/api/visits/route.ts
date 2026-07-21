@@ -59,6 +59,39 @@ interface GrossistePayload {
   category: "pharma" | "para_pharm";
 }
 
+interface TimingPayload {
+  stage: "trajet" | "attente" | "visite";
+  started_at?: string | null;
+  ended_at?: string | null;
+  duration_seconds: number;
+  mode: "auto" | "manual";
+}
+
+/** Keep one valid timing per stage (last wins). */
+function cleanTimings(input: unknown): TimingPayload[] {
+  if (!Array.isArray(input)) return [];
+  const byStage = new Map<string, TimingPayload>();
+  for (const t of input) {
+    if (
+      t &&
+      (t.stage === "trajet" || t.stage === "attente" || t.stage === "visite") &&
+      typeof t.duration_seconds === "number" &&
+      Number.isFinite(t.duration_seconds) &&
+      t.duration_seconds >= 0 &&
+      (t.mode === "auto" || t.mode === "manual")
+    ) {
+      byStage.set(t.stage, {
+        stage: t.stage,
+        started_at: typeof t.started_at === "string" ? t.started_at : null,
+        ended_at: typeof t.ended_at === "string" ? t.ended_at : null,
+        duration_seconds: Math.round(t.duration_seconds),
+        mode: t.mode,
+      });
+    }
+  }
+  return [...byStage.values()];
+}
+
 export async function POST(request: NextRequest) {
   const { userId } = await auth();
   if (!userId) {
@@ -75,6 +108,7 @@ export async function POST(request: NextRequest) {
     engagement,
     answers,
     grossistes,
+    timings,
   } = body as {
     doctor_id?: string;
     product_id?: string;
@@ -84,6 +118,7 @@ export async function POST(request: NextRequest) {
     engagement?: number | null;
     answers?: AnswerPayload[];
     grossistes?: GrossistePayload[];
+    timings?: TimingPayload[];
   };
 
   if (!doctor_id) {
@@ -111,7 +146,7 @@ export async function POST(request: NextRequest) {
   if (visit_type !== "medecin" && !compte_rendu) {
     return NextResponse.json({ error: "Commentaire requis" }, { status: 400 });
   }
-  // Engagement, when provided, must be an integer 1–5. Grossiste visits carry
+  // Engagement, when provided, must be an integer 1–3. Grossiste visits carry
   // no engagement.
   let engagementValue: number | null = null;
   if (visit_type !== "grossiste" && engagement != null) {
@@ -119,10 +154,10 @@ export async function POST(request: NextRequest) {
       typeof engagement !== "number" ||
       !Number.isInteger(engagement) ||
       engagement < 1 ||
-      engagement > 5
+      engagement > 3
     ) {
       return NextResponse.json(
-        { error: "L'engagement doit être un entier entre 1 et 5" },
+        { error: "L'engagement doit être un entier entre 1 et 3" },
         { status: 400 }
       );
     }
@@ -221,6 +256,24 @@ export async function POST(request: NextRequest) {
           category: g.category,
         })),
         { onConflict: "doctor_id,grossiste_id,category" }
+      );
+    }
+  }
+
+  // Persist stage timings (médecin visits). Immutable afterwards for the
+  // délégué — there is no délégué endpoint to change them. Best-effort.
+  if (visit_type === "medecin") {
+    const cleanTimingRows = cleanTimings(timings);
+    if (cleanTimingRows.length > 0) {
+      await supabase.from("visit_timings").insert(
+        cleanTimingRows.map((t) => ({
+          visit_id: visit.id,
+          stage: t.stage,
+          started_at: t.started_at,
+          ended_at: t.ended_at,
+          duration_seconds: t.duration_seconds,
+          mode: t.mode,
+        }))
       );
     }
   }

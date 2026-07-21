@@ -220,6 +220,65 @@ describe("/api/visits POST", () => {
     expect(supa._fromMock).toHaveBeenCalledWith("visit_grossistes");
     expect(supa._fromMock).toHaveBeenCalledWith("doctor_grossistes");
   });
+
+  it("rejects engagement above the 3-star scale", async () => {
+    mockAuth.mockResolvedValue({ userId: "clerk_d" });
+    const { POST } = await import("./route");
+    const res = await POST(
+      makeRequest("http://x/api/visits", {
+        method: "POST",
+        json: {
+          doctor_id: "d1",
+          visit_type: "pharmacien",
+          compte_rendu: "ok",
+          engagement: 4,
+        },
+      }) as never
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/entre 1 et 3/i);
+  });
+
+  it("persists visit_timings for a médecin visit", async () => {
+    mockAuth.mockResolvedValue({ userId: "clerk_d" });
+    mockGetOrCreateUser.mockResolvedValue(fakeDelegue);
+    const supa = makeSupabase({
+      visits: {
+        data: {
+          id: "v20",
+          doctor_id: "m1",
+          visit_type: "medecin",
+          doctor: { id: "m1", doctor_type: "medecin" },
+          user: fakeDelegue,
+        },
+        error: null,
+      },
+      visit_timings: { data: null, error: null },
+      visit_assignments: { data: [], error: null },
+    });
+    mockCreateClient.mockResolvedValue(supa);
+    const { POST } = await import("./route");
+    const res = await POST(
+      makeRequest("http://x/api/visits", {
+        method: "POST",
+        json: {
+          doctor_id: "m1",
+          product_id: "p1",
+          visit_type: "medecin",
+          objective: "obj",
+          compte_rendu: "ok",
+          engagement: 2,
+          timings: [
+            { stage: "trajet", duration_seconds: 600, mode: "auto" },
+            { stage: "visite", duration_seconds: 300, mode: "manual" },
+          ],
+        },
+      }) as never
+    );
+    expect(res.status).toBe(201);
+    expect(supa._fromMock).toHaveBeenCalledWith("visit_timings");
+  });
 });
 
 describe("/api/visits GET", () => {

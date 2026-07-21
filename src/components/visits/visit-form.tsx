@@ -16,6 +16,8 @@ import {
 import { DoctorSearch } from "@/components/doctors/doctor-search";
 import { DoctorForm } from "@/components/doctors/doctor-form";
 import { DoctorVisitTimeline } from "@/components/visits/doctor-visit-timeline";
+import { VisitTimer } from "@/components/visits/visit-timer";
+import { enqueueVisit } from "@/lib/offline/visit-queue";
 import { DeadlineSelect } from "@/components/assignments/deadline-select";
 import { YesNoToggle } from "@/components/visits/yes-no-toggle";
 import { ProductSelect } from "@/components/shared/product-select";
@@ -33,6 +35,7 @@ import type {
   ProductQuestion,
   VisitType,
   VisibleWhenRule,
+  VisitTiming,
 } from "@/types";
 
 /** Pharmacien path joins the parent product so we can group by product name. */
@@ -89,6 +92,8 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
   const [compteRendu, setCompteRendu] = useState("");
   const [engagement, setEngagement] = useState<number | null>(null);
   const [grossistes, setGrossistes] = useState<SelectedGrossiste[]>([]);
+  const [timings, setTimings] = useState<VisitTiming[]>([]);
+  const [timerReset, setTimerReset] = useState(0);
   const [answers, setAnswers] = useState<AnswersMap>({});
   const [questions, setQuestions] = useState<ProductQuestionWithProduct[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
@@ -108,6 +113,8 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
     setProductId("");
     setEngagement(null);
     setGrossistes([]);
+    setTimings([]);
+    setTimerReset((s) => s + 1);
   };
 
   // Reload questions when type or product changes.
@@ -241,21 +248,38 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
         engagement: visitType === "grossiste" ? null : engagement,
         answers: answersPayload,
         grossistes: grossistesPayload,
+        // Stage timings — médecin visits only.
+        timings: visitType === "medecin" ? timings : [],
       };
 
-      const res = await fetch("/api/visits", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error);
+      // Submit online; on a network failure, queue for automatic sync.
+      let queuedOffline = false;
+      try {
+        const res = await fetch("/api/visits", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error);
+        }
+      } catch (e) {
+        // A fetch network error is a TypeError → we're offline: queue it.
+        // Anything else is a real server rejection → surface it.
+        if (e instanceof TypeError) {
+          await enqueueVisit(payload);
+          queuedOffline = true;
+        } else {
+          throw e;
+        }
       }
 
-      // If next visit is planned, create assignment too
-      if (planNext && nextDeadline && doctor) {
+      if (queuedOffline) {
+        toast.success(
+          "Visite enregistrée hors-ligne — synchronisée dès le retour du réseau"
+        );
+      } else if (planNext && nextDeadline && doctor) {
         try {
           const assignRes = await fetch("/api/assignments", {
             method: "POST",
@@ -287,6 +311,8 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
       setCompteRendu("");
       setEngagement(null);
       setGrossistes([]);
+      setTimings([]);
+      setTimerReset((s) => s + 1);
       setAnswers({});
       setPlanNext(false);
       setNextDeadline("");
@@ -384,6 +410,19 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
             <DoctorVisitTimeline doctorId={doctor.id} />
             <Separator />
           </>
+        )}
+
+        {/* Stage chronometer — médecin only, once a doctor is chosen */}
+        {visitType === "medecin" && doctor && (
+          <Card className="bg-muted/20">
+            <CardContent className="p-4">
+              <VisitTimer
+                value={timings}
+                onChange={setTimings}
+                resetSignal={timerReset}
+              />
+            </CardContent>
+          </Card>
         )}
 
         {/* Objective (médecin only) */}

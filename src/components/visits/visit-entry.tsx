@@ -32,6 +32,7 @@ import {
 import { DeadlineSelect } from "@/components/assignments/deadline-select";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { EngagementStars } from "@/components/shared/engagement-stars";
+import { VisitTimingsView } from "@/components/visits/visit-timings-view";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { VisitWithDetails, VisitComment, VisitAnswer } from "@/types";
@@ -517,6 +518,7 @@ export function VisitEntry({
   showDoctor = false,
   highlightUserId,
   onClick,
+  userRole,
   highlightVisitId,
 }: VisitEntryProps) {
   const isHighlightTarget = highlightVisitId === visit.id;
@@ -921,6 +923,15 @@ export function VisitEntry({
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Stage timings (médecin) — read-only, superviseur can correct */}
+          {visit.visit_type === "medecin" && (
+            <VisitTimingsView
+              visitId={visit.id}
+              timings={visit.visit_timings ?? []}
+              userRole={userRole}
+            />
           )}
 
           {/* Comments with inline input */}
