@@ -188,7 +188,11 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
         ((q.input_type === "yes_no" && a.value_boolean !== null && a.value_boolean !== undefined) ||
           (q.input_type === "short_text" && !!a.value_text?.trim()) ||
           (q.input_type === "textarea" && !!a.value_text?.trim()) ||
-          (q.input_type === "number" && a.value_number !== undefined && a.value_number !== ""));
+          // A 0 quantity counts as "left empty" (see the number branch below).
+          (q.input_type === "number" &&
+            a.value_number !== undefined &&
+            a.value_number !== "" &&
+            Number(a.value_number) !== 0));
       if (!filled) {
         toast.error(`Question obligatoire : ${q.label}`);
         return;
@@ -211,6 +215,9 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
             if (a.value_number === undefined || a.value_number === "") return null;
             const n = Number(a.value_number);
             if (Number.isNaN(n)) return null;
+            // Treat 0 as "left empty" so an unfilled quantity isn't recorded
+            // as a real 0 in the relevé par produit.
+            if (n === 0) return null;
             return { question_id: q.id, value_number: n };
           }
           const text = a.value_text?.trim();
@@ -654,7 +661,7 @@ function QuestionInput({ question, answer, onChange }: QuestionInputProps) {
           min="0"
           value={answer?.value_number ?? ""}
           onChange={(e) => onChange({ value_number: e.target.value })}
-          placeholder="0"
+          placeholder="Laisser vide si non relevé"
         />
       </div>
     );

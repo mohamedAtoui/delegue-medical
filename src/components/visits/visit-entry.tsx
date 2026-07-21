@@ -59,7 +59,10 @@ function DynamicAnswerChip({ answer }: { answer: VisitAnswer }) {
   }
   const value =
     answer.value_text ??
-    (answer.value_number !== null && answer.value_number !== undefined
+    // A 0 quantity means "left empty" — don't render it as a real value.
+    (answer.value_number !== null &&
+    answer.value_number !== undefined &&
+    answer.value_number !== 0
       ? String(answer.value_number)
       : null);
   if (!value) return null;

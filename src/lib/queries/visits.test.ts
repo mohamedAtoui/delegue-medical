@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
  */
 
 const selectCalls: string[] = [];
+const eqCalls: [string, unknown][] = [];
 
 function builder() {
   const b: Record<string, unknown> = {};
@@ -16,8 +17,9 @@ function builder() {
     "select", "eq", "in", "gte", "lte", "or", "order", "range", "limit",
   ];
   for (const m of chain) {
-    b[m] = vi.fn((arg?: unknown) => {
+    b[m] = vi.fn((arg?: unknown, arg2?: unknown) => {
       if (m === "select" && typeof arg === "string") selectCalls.push(arg);
+      if (m === "eq" && typeof arg === "string") eqCalls.push([arg, arg2]);
       return b;
     });
   }
@@ -32,6 +34,7 @@ vi.mock("@/utils/supabase/server", () => ({
 
 beforeEach(() => {
   selectCalls.length = 0;
+  eqCalls.length = 0;
 });
 
 describe("fetchVisits doctor embed", () => {
@@ -52,5 +55,24 @@ describe("fetchVisits doctor embed", () => {
 
     const mainSelect = selectCalls.find((s) => s.includes("doctor:doctors"));
     expect(mainSelect).toContain("doctor:doctors!visits_doctor_id_fkey!inner");
+  });
+});
+
+describe("fetchVisits commune filter", () => {
+  it("filters on the embedded doctor commune with an inner join", async () => {
+    const { fetchVisits } = await import("./visits");
+    await fetchVisits({ all: true, commune: "Ain Arnat", page: 1, limit: 20 });
+
+    // Inner join is required, otherwise PostgREST keeps visits whose doctor
+    // doesn't match instead of excluding them.
+    const mainSelect = selectCalls.find((s) => s.includes("doctor:doctors"));
+    expect(mainSelect).toContain("doctor:doctors!visits_doctor_id_fkey!inner");
+    expect(eqCalls).toContainEqual(["doctor.commune", "Ain Arnat"]);
+  });
+
+  it("does not filter by commune when none is given", async () => {
+    const { fetchVisits } = await import("./visits");
+    await fetchVisits({ all: true, page: 1, limit: 20 });
+    expect(eqCalls.find(([col]) => col === "doctor.commune")).toBeUndefined();
   });
 });

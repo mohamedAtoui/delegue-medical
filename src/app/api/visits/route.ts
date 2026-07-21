@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
           ? type
           : null,
       wilaya: searchParams.get("wilaya"),
+      commune: searchParams.get("commune")?.trim() || null,
       search: searchParams.get("search")?.trim() || null,
       page: parseInt(searchParams.get("page") || "1"),
       limit: parseInt(searchParams.get("limit") || "20"),
