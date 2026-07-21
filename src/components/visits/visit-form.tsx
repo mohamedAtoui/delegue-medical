@@ -378,6 +378,20 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
           </div>
         </div>
 
+        {/* Stage chronometer — médecin visits. Shown immediately so the
+            délégué can start the "trajet" chrono before picking the doctor. */}
+        {visitType === "medecin" && (
+          <Card className="bg-muted/20">
+            <CardContent className="p-4">
+              <VisitTimer
+                value={timings}
+                onChange={setTimings}
+                resetSignal={timerReset}
+              />
+            </CardContent>
+          </Card>
+        )}
+
         {/* Product picker — médecin only (pharmacien visits cover all products) */}
         {visitType === "medecin" && (
           <div className="space-y-2">
@@ -410,19 +424,6 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
             <DoctorVisitTimeline doctorId={doctor.id} />
             <Separator />
           </>
-        )}
-
-        {/* Stage chronometer — médecin only, once a doctor is chosen */}
-        {visitType === "medecin" && doctor && (
-          <Card className="bg-muted/20">
-            <CardContent className="p-4">
-              <VisitTimer
-                value={timings}
-                onChange={setTimings}
-                resetSignal={timerReset}
-              />
-            </CardContent>
-          </Card>
         )}
 
         {/* Objective (médecin only) */}
