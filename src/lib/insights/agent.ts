@@ -80,7 +80,7 @@ NOTES
 - Les dates sont en UTC (timestamptz). Pour "cette semaine" utilise date_trunc('week', now()).
 - doctor_type='pharmacien'/'grossiste' => visites sans product_id; 'medecin' => product_id requis.
 - Le nombre de visites d'un médecin = count(*) sur visits (PAS le nombre de commentaires).
-- engagement du médecin = doctors.engagement = moyenne de visits.engagement (non-nuls).
+- engagement du médecin = doctors.engagement = moyenne de coalesce(visits.engagement, 0) sur les visites non-grossiste (une visite sans engagement compte comme 0).
 - Joins fréquents: visits.user_id=users.id, visits.doctor_id=doctors.id.`;
 }
 

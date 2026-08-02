@@ -424,8 +424,8 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
             </div>
             {isEdit && (
               <p className="text-xs text-muted-foreground">
-                Valeur de base ; recalculée en moyenne dès qu&apos;un engagement
-                est saisi en visite.
+                Valeur de base ; recalculée en moyenne sur les visites, une
+                visite sans étoile comptant comme 0.
               </p>
             )}
           </div>

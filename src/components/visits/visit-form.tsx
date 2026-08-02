@@ -480,8 +480,8 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Facultatif. La moyenne des engagements saisis définit
-              l&apos;engagement final.
+              Facultatif. Une visite sans étoile compte comme 0 dans la
+              moyenne d&apos;engagement du médecin.
             </p>
           </div>
         )}
