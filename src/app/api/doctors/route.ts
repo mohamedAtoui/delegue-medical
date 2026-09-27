@@ -69,15 +69,16 @@ export async function POST(request: NextRequest) {
     grossistes,
   } = body;
 
-  if (!first_name || !last_name || !wilaya) {
+  const isPharmacien = doctor_type === "pharmacien";
+  const isGrossiste = doctor_type === "grossiste";
+
+  if (!last_name?.trim() || !wilaya?.trim() || (!isGrossiste && !first_name?.trim())) {
     return NextResponse.json(
-      { error: "Prénom, nom et wilaya sont requis" },
+      { error: isGrossiste ? "Nom et wilaya sont requis" : "Prénom, nom et wilaya sont requis" },
       { status: 400 }
     );
   }
 
-  const isPharmacien = doctor_type === "pharmacien";
-  const isGrossiste = doctor_type === "grossiste";
   // Grossistes are quick-add contacts (name + wilaya). Médecins/pharmaciens
   // keep the fuller validation.
   if (!isPharmacien && !isGrossiste && !specialty) {
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
   const { data, error } = await supabase
     .from("doctors")
     .insert({
-      first_name,
+      first_name: isGrossiste ? (first_name?.trim() || "") : first_name,
       last_name,
       doctor_type: doctor_type || "medecin",
       specialty: isPharmacien || isGrossiste ? null : (specialty || null),

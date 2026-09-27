@@ -228,8 +228,8 @@ export async function POST(request: NextRequest) {
   }
 
   // Persist grossistes recorded at this pharmacy visit and keep the pharmacy's
-  // current grossiste list (doctor_grossistes) in sync. Best-effort: a failure
-  // here doesn't invalidate the saved visit.
+  // current grossiste list (doctor_grossistes) in sync. If either write fails,
+  // do not tell the user the visit was saved without its selected grossistes.
   if (
     visit_type === "pharmacien" &&
     Array.isArray(grossistes) &&
@@ -242,14 +242,21 @@ export async function POST(request: NextRequest) {
         (g.category === "pharma" || g.category === "para_pharm")
     );
     if (clean.length > 0) {
-      await supabase.from("visit_grossistes").insert(
+      const { error: visitGrossistesError } = await supabase.from("visit_grossistes").insert(
         clean.map((g) => ({
           visit_id: visit.id,
           grossiste_id: g.grossiste_id,
           category: g.category,
         }))
       );
-      await supabase.from("doctor_grossistes").upsert(
+      if (visitGrossistesError) {
+        await supabase.from("visits").delete().eq("id", visit.id);
+        return NextResponse.json(
+          { error: `Impossible d'enregistrer les grossistes de la visite : ${visitGrossistesError.message}` },
+          { status: 500 }
+        );
+      }
+      const { error: doctorGrossistesError } = await supabase.from("doctor_grossistes").upsert(
         clean.map((g) => ({
           doctor_id,
           grossiste_id: g.grossiste_id,
@@ -257,6 +264,13 @@ export async function POST(request: NextRequest) {
         })),
         { onConflict: "doctor_id,grossiste_id,category" }
       );
+      if (doctorGrossistesError) {
+        await supabase.from("visits").delete().eq("id", visit.id);
+        return NextResponse.json(
+          { error: `Impossible de lier les grossistes à la pharmacie : ${doctorGrossistesError.message}` },
+          { status: 500 }
+        );
+      }
     }
   }
 

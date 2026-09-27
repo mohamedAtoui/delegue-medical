@@ -221,6 +221,77 @@ describe("/api/visits POST", () => {
     expect(supa._fromMock).toHaveBeenCalledWith("doctor_grossistes");
   });
 
+  it("does not report success when pharmacy visit grossistes cannot be saved", async () => {
+    mockAuth.mockResolvedValue({ userId: "clerk_d" });
+    mockGetOrCreateUser.mockResolvedValue(fakeDelegue);
+    const supa = makeSupabase({
+      visits: {
+        data: {
+          id: "v10",
+          doctor_id: "ph1",
+          visit_type: "pharmacien",
+          doctor: { id: "ph1", doctor_type: "pharmacien" },
+          user: fakeDelegue,
+        },
+        error: null,
+      },
+      visit_grossistes: { data: null, error: { message: "Insertion refusée" } },
+    });
+    mockCreateClient.mockResolvedValue(supa);
+    const { POST } = await import("./route");
+    const res = await POST(
+      makeRequest("http://x/api/visits", {
+        method: "POST",
+        json: {
+          doctor_id: "ph1",
+          visit_type: "pharmacien",
+          compte_rendu: "ok",
+          grossistes: [{ grossiste_id: "g1", category: "pharma" }],
+        },
+      }) as never
+    );
+
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toMatch(/grossiste/i);
+    expect(supa._fromMock.mock.calls.filter(([table]) => table === "visits")).toHaveLength(2);
+  });
+
+  it("does not report success when the pharmacy grossiste directory cannot be updated", async () => {
+    mockAuth.mockResolvedValue({ userId: "clerk_d" });
+    mockGetOrCreateUser.mockResolvedValue(fakeDelegue);
+    const supa = makeSupabase({
+      visits: {
+        data: {
+          id: "v11",
+          doctor_id: "ph1",
+          visit_type: "pharmacien",
+          doctor: { id: "ph1", doctor_type: "pharmacien" },
+          user: fakeDelegue,
+        },
+        error: null,
+      },
+      visit_grossistes: { data: null, error: null },
+      doctor_grossistes: { data: null, error: { message: "Lien refusé" } },
+    });
+    mockCreateClient.mockResolvedValue(supa);
+    const { POST } = await import("./route");
+    const res = await POST(
+      makeRequest("http://x/api/visits", {
+        method: "POST",
+        json: {
+          doctor_id: "ph1",
+          visit_type: "pharmacien",
+          compte_rendu: "ok",
+          grossistes: [{ grossiste_id: "g1", category: "para_pharm" }],
+        },
+      }) as never
+    );
+
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toMatch(/grossiste/i);
+    expect(supa._fromMock.mock.calls.filter(([table]) => table === "visits")).toHaveLength(2);
+  });
+
   it("rejects engagement above the 3-star scale", async () => {
     mockAuth.mockResolvedValue({ userId: "clerk_d" });
     const { POST } = await import("./route");
@@ -279,6 +350,7 @@ describe("/api/visits POST", () => {
     expect(res.status).toBe(201);
     expect(supa._fromMock).toHaveBeenCalledWith("visit_timings");
   });
+
 });
 
 describe("/api/visits GET", () => {
