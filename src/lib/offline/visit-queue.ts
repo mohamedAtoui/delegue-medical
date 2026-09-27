@@ -66,7 +66,9 @@ export function onPendingChanged(cb: () => void): () => void {
 }
 
 export async function enqueueVisit(payload: unknown): Promise<void> {
-  if (!hasIDB()) return;
+  if (!hasIDB()) {
+    throw new Error("Stockage hors ligne indisponible : la visite reste en brouillon");
+  }
   const item: PendingVisit = {
     id:
       typeof crypto !== "undefined" && crypto.randomUUID

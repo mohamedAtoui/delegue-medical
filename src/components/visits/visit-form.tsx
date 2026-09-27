@@ -18,6 +18,12 @@ import { DoctorForm } from "@/components/doctors/doctor-form";
 import { DoctorVisitTimeline } from "@/components/visits/doctor-visit-timeline";
 import { VisitTimer } from "@/components/visits/visit-timer";
 import { enqueueVisit } from "@/lib/offline/visit-queue";
+import {
+  clearVisitDraft,
+  readVisitDraft,
+  saveVisitDraft,
+  type VisitDraft,
+} from "@/lib/visits/visit-draft";
 import { DeadlineSelect } from "@/components/assignments/deadline-select";
 import { YesNoToggle } from "@/components/visits/yes-no-toggle";
 import { ProductSelect } from "@/components/shared/product-select";
@@ -44,6 +50,7 @@ type ProductQuestionWithProduct = ProductQuestion & {
 };
 
 interface VisitFormProps {
+  userId: string;
   onSuccess: () => void;
 }
 
@@ -84,7 +91,7 @@ function isVisible(
   return true;
 }
 
-export function VisitForm({ onSuccess }: VisitFormProps) {
+export function VisitForm({ userId, onSuccess }: VisitFormProps) {
   const [visitType, setVisitType] = useState<VisitType>("medecin");
   const [productId, setProductId] = useState<string>("");
   const [doctor, setDoctor] = useState<Doctor | null>(null);
@@ -99,11 +106,54 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showDoctorForm, setShowDoctorForm] = useState(false);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
 
   // Next visit planning (optional, inside form before submit)
   const [planNext, setPlanNext] = useState(false);
   const [nextDeadline, setNextDeadline] = useState("");
   const [nextNote, setNextNote] = useState("");
+  // Restore after hydration so the server and first client render agree.
+  useEffect(() => {
+    const draft = readVisitDraft(userId);
+    if (draft) {
+      setVisitType(draft.visitType);
+      setProductId(draft.productId);
+      setDoctor(draft.doctor);
+      setObjective(draft.objective);
+      setCompteRendu(draft.compteRendu);
+      setEngagement(draft.engagement);
+      setGrossistes(draft.grossistes);
+      setTimings(draft.timings);
+      setAnswers(draft.answers);
+      setPlanNext(draft.planNext);
+      setNextDeadline(draft.nextDeadline);
+      setNextNote(draft.nextNote);
+    }
+    setDraftReady(true);
+  }, [userId]);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    const draft: VisitDraft = {
+      visitType, productId, doctor, objective, compteRendu, engagement,
+      grossistes, timings, answers, planNext, nextDeadline, nextNote,
+    };
+    setDraftSaved(saveVisitDraft(userId, draft));
+    const saveOnExit = () => {
+      saveVisitDraft(userId, draft);
+    };
+    const saveWhenHidden = () => {
+      if (document.visibilityState === "hidden") saveOnExit();
+    };
+    window.addEventListener("pagehide", saveOnExit);
+    document.addEventListener("visibilitychange", saveWhenHidden);
+    return () => {
+      window.removeEventListener("pagehide", saveOnExit);
+      document.removeEventListener("visibilitychange", saveWhenHidden);
+    };
+  }, [userId, draftReady, visitType, productId, doctor, objective, compteRendu,
+    engagement, grossistes, timings, answers, planNext, nextDeadline, nextNote]);
 
   const switchType = (t: VisitType) => {
     if (t === visitType) return;
@@ -145,7 +195,6 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
 
   useEffect(() => {
     loadQuestions();
-    setAnswers({});
   }, [loadQuestions]);
 
   const questionsById = new Map(questions.map((q) => [q.id, q]));
@@ -306,6 +355,8 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
       }
 
       // Reset form
+      clearVisitDraft(userId);
+      setDraftReady(false);
       setDoctor(null);
       setObjective("");
       setCompteRendu("");
@@ -329,9 +380,18 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
     isVisible(q.visible_when, answers, questionsById)
   );
 
+  if (!draftReady) {
+    return <p className="py-6 text-sm text-muted-foreground" role="status">Ouverture de votre visite…</p>;
+  }
+
   return (
     <>
       <form onSubmit={handleSubmit} className="space-y-5">
+        <p className="text-xs text-muted-foreground" role="status">
+          {draftReady && (draftSaved
+            ? "Sauvegarde automatique activée sur cet appareil"
+            : "Sauvegarde du brouillon indisponible sur cet appareil")}
+        </p>
         {/* Type selector — drives whether a product picker is needed */}
         <div className="space-y-2">
           <Label>Type de visite *</Label>
@@ -396,7 +456,15 @@ export function VisitForm({ onSuccess }: VisitFormProps) {
         {visitType === "medecin" && (
           <div className="space-y-2">
             <Label>Produit *</Label>
-            <ProductSelect value={productId} onValueChange={setProductId} />
+            <ProductSelect
+              value={productId}
+              onValueChange={(next) => {
+                if (next !== productId) {
+                  setProductId(next);
+                  setAnswers({});
+                }
+              }}
+            />
           </div>
         )}
 

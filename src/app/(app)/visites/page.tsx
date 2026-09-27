@@ -23,6 +23,7 @@ export default async function VisitesPage() {
     <Suspense fallback={null}>
       <VisitesClient
         role={user.role}
+        userId={user.id}
         initialVisits={initial.data}
         initialTotal={initial.count}
       />

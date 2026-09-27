@@ -32,6 +32,11 @@ import {
 import { VisitForm } from "@/components/visits/visit-form";
 import { VisitHistory } from "@/components/visits/visit-history";
 import { useVisitSync } from "@/lib/offline/use-visit-sync";
+import {
+  isVisitFormOpen,
+  readVisitDraft,
+  setVisitFormOpen,
+} from "@/lib/visits/visit-draft";
 import { CloudOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DoctorType, User, UserRole, VisitWithDetails } from "@/types";
@@ -40,16 +45,19 @@ type TypeFilter = "" | DoctorType;
 
 interface VisitesClientProps {
   role: UserRole;
+  userId: string;
   initialVisits?: VisitWithDetails[];
   initialTotal?: number;
 }
 
-export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClientProps) {
+export function VisitesClient({ role, userId, initialVisits, initialTotal }: VisitesClientProps) {
   const isSupervisor = role === "superviseur";
   const searchParams = useSearchParams();
   const highlightVisitId = searchParams.get("visit") || undefined;
   const [refreshKey, setRefreshKey] = useState(0);
   const [showForm, setShowForm] = useState(false);
+  const [restoredUserId, setRestoredUserId] = useState<string | null>(null);
+  const [hasDraft, setHasDraft] = useState(false);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
   const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: "" });
   const [wilayaFilter, setWilayaFilter] = useState("");
@@ -59,6 +67,23 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
   const [search, setSearch] = useState("");
   const [reps, setReps] = useState<User[]>([]);
   const [me, setMe] = useState<User | null>(null);
+
+  useEffect(() => {
+    setHasDraft(readVisitDraft(userId) !== null);
+    setShowForm(isVisitFormOpen(userId));
+    setRestoredUserId(userId);
+  }, [userId]);
+
+  const openForm = () => {
+    setVisitFormOpen(userId, true);
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setVisitFormOpen(userId, false);
+    setHasDraft(readVisitDraft(userId) !== null);
+    setShowForm(false);
+  };
 
   // Offline queue: drains automatically on reconnect; refresh the list on sync.
   const { pending: pendingVisits } = useVisitSync(() =>
@@ -110,13 +135,17 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
     setSearchInput("");
   };
 
+  if (restoredUserId !== userId) {
+    return <div className="min-h-[60vh]" aria-busy="true" />;
+  }
+
   if (showForm) {
     return (
       <div className="flex flex-col items-center justify-start min-h-[60vh]">
         <div className="w-full max-w-2xl">
           <Button
             variant="ghost"
-            onClick={() => setShowForm(false)}
+            onClick={closeForm}
             className="mb-4 cursor-pointer"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -129,9 +158,12 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
             </CardHeader>
             <CardContent>
               <VisitForm
+                key={userId}
+                userId={userId}
                 onSuccess={() => {
                   setRefreshKey((k) => k + 1);
-                  setShowForm(false);
+                  setHasDraft(false);
+                  closeForm();
                 }}
               />
             </CardContent>
@@ -156,10 +188,14 @@ export function VisitesClient({ role, initialVisits, initialTotal }: VisitesClie
           </p>
         </div>
 
-        <Button onClick={() => setShowForm(true)} className="cursor-pointer">
+        <Button
+          onClick={openForm}
+          className="cursor-pointer"
+          aria-label={hasDraft ? "Reprendre la visite" : "Nouvelle visite"}
+        >
           <Plus className="mr-2 h-4 w-4" />
-          <span className="hidden sm:inline">Nouvelle visite</span>
-          <span className="sm:hidden">Nouveau</span>
+          <span className="hidden sm:inline">{hasDraft ? "Reprendre la visite" : "Nouvelle visite"}</span>
+          <span className="sm:hidden">{hasDraft ? "Reprendre" : "Nouveau"}</span>
         </Button>
       </div>
 
