@@ -105,4 +105,49 @@ describe("/api/doctors POST", () => {
     );
     expect(res.status).toBe(201);
   });
+
+  it("creates a grossiste with only a name and wilaya", async () => {
+    mockAuth.mockResolvedValue({ userId: "clerk_d" });
+    mockGetOrCreateUser.mockResolvedValue(fakeDelegue);
+    const supabase = makeSupabase({
+      doctors: {
+        data: { id: "g1", first_name: "", last_name: "Test", wilaya: "In Salah", doctor_type: "grossiste" },
+        error: null,
+      },
+    });
+    mockCreateClient.mockResolvedValue(supabase);
+
+    const { POST } = await import("./route");
+    const res = await POST(
+      makeRequest("http://x/api/doctors", {
+        method: "POST",
+        json: {
+          first_name: "",
+          last_name: "Test",
+          doctor_type: "grossiste",
+          wilaya: "In Salah",
+          commune: "In Salah",
+        },
+      }) as never
+    );
+
+    expect(res.status).toBe(201);
+    expect((await res.json()).id).toBe("g1");
+    const builder = supabase._fromMock.mock.results[0].value;
+    expect(builder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ first_name: "", last_name: "Test", doctor_type: "grossiste", wilaya: "In Salah" })
+    );
+  });
+
+  it("still requires a first name for a pharmacien", async () => {
+    mockAuth.mockResolvedValue({ userId: "clerk_d" });
+    const { POST } = await import("./route");
+    const res = await POST(
+      makeRequest("http://x/api/doctors", {
+        method: "POST",
+        json: { first_name: "", last_name: "Test", doctor_type: "pharmacien", wilaya: "Alger" },
+      }) as never
+    );
+    expect(res.status).toBe(400);
+  });
 });
