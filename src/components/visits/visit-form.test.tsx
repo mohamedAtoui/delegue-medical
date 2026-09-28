@@ -89,7 +89,7 @@ afterEach(() => {
 describe("VisitForm draft", () => {
   it("restores all visit fields and answers after unmounting and reopening", async () => {
     saveVisitDraft("user-1", draft);
-    const first = render(<VisitForm userId="user-1" onSuccess={vi.fn()} />);
+    const first = render(<VisitForm userId="user-1" onSuccess={vi.fn()} onSaveDraft={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByDisplayValue("Réponse conservée")).toBeTruthy());
     expect(screen.getByDisplayValue("Présenter le produit")).toBeTruthy();
@@ -103,7 +103,7 @@ describe("VisitForm draft", () => {
     await waitFor(() => expect(readVisitDraft("user-1")?.compteRendu).toBe("Compte rendu mis à jour"));
 
     first.unmount();
-    render(<VisitForm userId="user-1" onSuccess={vi.fn()} />);
+    render(<VisitForm userId="user-1" onSuccess={vi.fn()} onSaveDraft={vi.fn()} />);
     await waitFor(() => expect(screen.getByDisplayValue("Compte rendu mis à jour")).toBeTruthy());
     expect(screen.getByDisplayValue("Réponse conservée")).toBeTruthy();
   });
@@ -111,12 +111,30 @@ describe("VisitForm draft", () => {
   it("clears the draft only after a successful visit", async () => {
     saveVisitDraft("user-1", draft);
     const onSuccess = vi.fn();
-    render(<VisitForm userId="user-1" onSuccess={onSuccess} />);
+    render(<VisitForm userId="user-1" onSuccess={onSuccess} onSaveDraft={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByDisplayValue("Premier compte rendu")).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Enregistrer la visite" }));
 
     await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
     expect(readVisitDraft("user-1")).toBeNull();
+  });
+
+  it("saves a draft without submitting the visit, then lets the delegate resume it", async () => {
+    const onSaveDraft = vi.fn();
+    const onSuccess = vi.fn();
+    const fetchMock = vi.mocked(fetch);
+    render(<VisitForm userId="user-1" onSuccess={onSuccess} onSaveDraft={onSaveDraft} />);
+
+    await waitFor(() => expect(screen.getByLabelText("Objectif de la visite *")).toBeTruthy());
+    fireEvent.change(screen.getByLabelText("Objectif de la visite *"), {
+      target: { value: "Présenter Synapgen" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer comme brouillon" }));
+
+    expect(onSaveDraft).toHaveBeenCalledOnce();
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(readVisitDraft("user-1")?.objective).toBe("Présenter Synapgen");
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/visits", expect.anything());
   });
 });

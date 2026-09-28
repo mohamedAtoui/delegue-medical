@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { VisitesClient } from "./visites-client";
-import { saveVisitDraft, setVisitFormOpen, type VisitDraft } from "@/lib/visits/visit-draft";
+import { readVisitDraft, saveVisitDraft, setVisitFormOpen, type VisitDraft } from "@/lib/visits/visit-draft";
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
@@ -12,7 +12,12 @@ vi.mock("@/lib/offline/use-visit-sync", () => ({
   useVisitSync: () => ({ pending: 0 }),
 }));
 vi.mock("@/components/visits/visit-form", () => ({
-  VisitForm: () => <div data-testid="visit-form">Formulaire de visite</div>,
+  VisitForm: ({ onSaveDraft }: { onSaveDraft: () => void }) => (
+    <div data-testid="visit-form">
+      Formulaire de visite
+      <button onClick={onSaveDraft}>Enregistrer comme brouillon</button>
+    </div>
+  ),
 }));
 vi.mock("@/components/visits/visit-history", () => ({
   VisitHistory: () => <div />,
@@ -66,6 +71,34 @@ describe("VisitesClient draft navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retour aux visites" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Reprendre la visite" })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Reprendre la visite" }));
+    expect(screen.getByTestId("visit-form")).toBeTruthy();
+  });
+
+  it("shows the saved draft on the visits page and asks before discarding it", async () => {
+    saveVisitDraft("user-1", draft);
+    render(<VisitesClient role="delegue" userId="user-1" initialVisits={[]} initialTotal={0} />);
+
+    await waitFor(() => expect(screen.getByText("Brouillon de visite")).toBeTruthy());
+    expect(screen.getByText("Médecin à sélectionner")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Supprimer le brouillon" }));
+    expect(readVisitDraft("user-1")).not.toBeNull();
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Annuler" }));
+    expect(readVisitDraft("user-1")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Supprimer le brouillon" }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Supprimer le brouillon" }));
+    await waitFor(() => expect(readVisitDraft("user-1")).toBeNull());
+  });
+
+  it("returns to the visits list after saving and resumes the same draft", async () => {
+    saveVisitDraft("user-1", draft);
+    setVisitFormOpen("user-1", true);
+    render(<VisitesClient role="delegue" userId="user-1" initialVisits={[]} initialTotal={0} />);
+
+    await waitFor(() => expect(screen.getByTestId("visit-form")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer comme brouillon" }));
+    await waitFor(() => expect(screen.getByText("Brouillon de visite")).toBeTruthy());
+    expect(readVisitDraft("user-1")?.objective).toBe("Présenter le produit");
+    fireEvent.click(screen.getByRole("button", { name: "Reprendre", exact: true }));
     expect(screen.getByTestId("visit-form")).toBeTruthy();
   });
 });

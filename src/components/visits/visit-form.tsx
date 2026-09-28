@@ -20,6 +20,7 @@ import { VisitTimer } from "@/components/visits/visit-timer";
 import { enqueueVisit } from "@/lib/offline/visit-queue";
 import {
   clearVisitDraft,
+  hasVisitDraftContent,
   readVisitDraft,
   saveVisitDraft,
   type VisitDraft,
@@ -34,7 +35,7 @@ import {
   type SelectedGrossiste,
 } from "@/components/doctors/grossiste-combobox";
 import { toast } from "sonner";
-import { Send, Stethoscope, Pill, Truck, CalendarCheck, ChevronDown } from "lucide-react";
+import { Send, Stethoscope, Pill, Truck, CalendarCheck, ChevronDown, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   Doctor,
@@ -52,6 +53,7 @@ type ProductQuestionWithProduct = ProductQuestion & {
 interface VisitFormProps {
   userId: string;
   onSuccess: () => void;
+  onSaveDraft: () => void;
 }
 
 /** Answer keyed by question_id. Only one of the three value slots is set. */
@@ -91,7 +93,7 @@ function isVisible(
   return true;
 }
 
-export function VisitForm({ userId, onSuccess }: VisitFormProps) {
+export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
   const [visitType, setVisitType] = useState<VisitType>("medecin");
   const [productId, setProductId] = useState<string>("");
   const [doctor, setDoctor] = useState<Doctor | null>(null);
@@ -201,6 +203,23 @@ export function VisitForm({ userId, onSuccess }: VisitFormProps) {
 
   const setAnswer = (id: string, update: AnswerValue) => {
     setAnswers((prev) => ({ ...prev, [id]: update }));
+  };
+
+  const handleSaveDraft = () => {
+    const draft: VisitDraft = {
+      visitType, productId, doctor, objective, compteRendu, engagement,
+      grossistes, timings, answers, planNext, nextDeadline, nextNote,
+    };
+    if (!hasVisitDraftContent(draft)) {
+      toast.error("Renseignez au moins un élément avant de sauvegarder le brouillon");
+      return;
+    }
+    if (!saveVisitDraft(userId, draft)) {
+      toast.error("Impossible de sauvegarder le brouillon sur cet appareil");
+      return;
+    }
+    toast.success("Brouillon enregistré. Vous pourrez le reprendre dans Visites.");
+    onSaveDraft();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -681,11 +700,22 @@ export function VisitForm({ userId, onSuccess }: VisitFormProps) {
           </>
         )}
 
-        <div className="sticky bottom-0 -mx-2 bg-background/95 px-2 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
+        <div className="sticky bottom-0 -mx-2 flex flex-col gap-2 border-t border-border/60 bg-background/95 px-2 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:static sm:mx-0 sm:flex-row sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={loading || !draftSaved}
+            onClick={handleSaveDraft}
+            className="w-full cursor-pointer sm:w-auto"
+            size="lg"
+          >
+            <Save className="mr-2 h-4 w-4" />
+            Enregistrer comme brouillon
+          </Button>
           <Button
             type="submit"
             disabled={loading || !doctor || (visitType === "medecin" && !productId) || (planNext && !nextDeadline)}
-            className="w-full cursor-pointer"
+            className="w-full cursor-pointer sm:flex-1"
             size="lg"
           >
             {loading ? (

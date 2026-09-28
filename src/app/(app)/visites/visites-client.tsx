@@ -10,6 +10,8 @@ import {
   Truck,
   Users,
   X,
+  FilePenLine,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,11 +33,23 @@ import {
 } from "@/components/shared/date-range-filter";
 import { VisitForm } from "@/components/visits/visit-form";
 import { VisitHistory } from "@/components/visits/visit-history";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useVisitSync } from "@/lib/offline/use-visit-sync";
 import {
+  clearVisitDraft,
   isVisitFormOpen,
-  readVisitDraft,
+  readVisitDraftRecord,
   setVisitFormOpen,
+  type VisitDraftRecord,
 } from "@/lib/visits/visit-draft";
 import { CloudOff } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -57,7 +71,8 @@ export function VisitesClient({ role, userId, initialVisits, initialTotal }: Vis
   const [refreshKey, setRefreshKey] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [restoredUserId, setRestoredUserId] = useState<string | null>(null);
-  const [hasDraft, setHasDraft] = useState(false);
+  const [draft, setDraft] = useState<VisitDraftRecord | null>(null);
+  const [discardOpen, setDiscardOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
   const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: "" });
   const [wilayaFilter, setWilayaFilter] = useState("");
@@ -69,7 +84,7 @@ export function VisitesClient({ role, userId, initialVisits, initialTotal }: Vis
   const [me, setMe] = useState<User | null>(null);
 
   useEffect(() => {
-    setHasDraft(readVisitDraft(userId) !== null);
+    setDraft(readVisitDraftRecord(userId));
     setShowForm(isVisitFormOpen(userId));
     setRestoredUserId(userId);
   }, [userId]);
@@ -81,8 +96,15 @@ export function VisitesClient({ role, userId, initialVisits, initialTotal }: Vis
 
   const closeForm = () => {
     setVisitFormOpen(userId, false);
-    setHasDraft(readVisitDraft(userId) !== null);
+    setDraft(readVisitDraftRecord(userId));
     setShowForm(false);
+  };
+
+  const discardDraft = () => {
+    clearVisitDraft(userId);
+    setVisitFormOpen(userId, false);
+    setDraft(null);
+    setDiscardOpen(false);
   };
 
   // Offline queue: drains automatically on reconnect; refresh the list on sync.
@@ -160,9 +182,9 @@ export function VisitesClient({ role, userId, initialVisits, initialTotal }: Vis
               <VisitForm
                 key={userId}
                 userId={userId}
+                onSaveDraft={closeForm}
                 onSuccess={() => {
                   setRefreshKey((k) => k + 1);
-                  setHasDraft(false);
                   closeForm();
                 }}
               />
@@ -191,13 +213,77 @@ export function VisitesClient({ role, userId, initialVisits, initialTotal }: Vis
         <Button
           onClick={openForm}
           className="cursor-pointer"
-          aria-label={hasDraft ? "Reprendre la visite" : "Nouvelle visite"}
+          aria-label={draft ? "Reprendre la visite" : "Nouvelle visite"}
         >
           <Plus className="mr-2 h-4 w-4" />
-          <span className="hidden sm:inline">{hasDraft ? "Reprendre la visite" : "Nouvelle visite"}</span>
-          <span className="sm:hidden">{hasDraft ? "Reprendre" : "Nouveau"}</span>
+          <span className="hidden sm:inline">{draft ? "Reprendre la visite" : "Nouvelle visite"}</span>
+          <span className="sm:hidden">{draft ? "Reprendre" : "Nouveau"}</span>
         </Button>
       </div>
+
+      {draft && (
+        <Card className="overflow-hidden border-primary/30 bg-primary/[0.035]">
+          <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <FilePenLine className="size-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary">Brouillon de visite</p>
+                <p className="truncate font-semibold text-foreground">
+                  {draft.doctor
+                    ? `${draft.doctor.first_name} ${draft.doctor.last_name}`
+                    : draft.visitType === "pharmacien"
+                      ? "Pharmacien à sélectionner"
+                      : draft.visitType === "grossiste"
+                        ? "Grossiste à sélectionner"
+                        : "Médecin à sélectionner"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {draft.visitType === "medecin" ? "Médecin" : draft.visitType === "pharmacien" ? "Pharmacien" : "Grossiste"}
+                  {draft.doctor?.wilaya ? ` · ${draft.doctor.wilaya}` : ""}
+                  {Number.isFinite(Date.parse(draft.savedAt))
+                    ? ` · Sauvegardé le ${new Intl.DateTimeFormat("fr-DZ", { dateStyle: "medium", timeStyle: "short" }).format(new Date(draft.savedAt))}`
+                    : ""}
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 gap-2 sm:items-center">
+              <Button type="button" onClick={openForm} className="flex-1 cursor-pointer sm:flex-none">
+                Reprendre
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Supprimer le brouillon"
+                title="Supprimer le brouillon"
+                onClick={() => setDiscardOpen(true)}
+                className="cursor-pointer text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer ce brouillon ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Les informations saisies pour cette visite seront perdues. Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={discardDraft}>
+              Supprimer le brouillon
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Offline queue indicator */}
       {pendingVisits > 0 && (

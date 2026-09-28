@@ -24,6 +24,7 @@ export interface VisitDraft {
 }
 
 type StoredDraft = VisitDraft & { version: number; savedAt: string };
+export type VisitDraftRecord = VisitDraft & { savedAt: string };
 
 function draftKey(userId: string): string {
   return `${DRAFT_PREFIX}.${userId}`;
@@ -58,7 +59,7 @@ export function hasVisitDraftContent(draft: VisitDraft): boolean {
   );
 }
 
-export function readVisitDraft(userId: string): VisitDraft | null {
+export function readVisitDraftRecord(userId: string): VisitDraftRecord | null {
   const store = storage();
   if (!store) return null;
   try {
@@ -79,6 +80,7 @@ export function readVisitDraft(userId: string): VisitDraft | null {
       typeof draft.planNext !== "boolean" ||
       typeof draft.nextDeadline !== "string" ||
       typeof draft.nextNote !== "string" ||
+      typeof draft.savedAt !== "string" ||
       (draft.engagement !== null && typeof draft.engagement !== "number") ||
       (draft.doctor !== null &&
         (!draft.doctor ||
@@ -89,6 +91,10 @@ export function readVisitDraft(userId: string): VisitDraft | null {
   } catch {
     return null;
   }
+}
+
+export function readVisitDraft(userId: string): VisitDraft | null {
+  return readVisitDraftRecord(userId);
 }
 
 export function saveVisitDraft(userId: string, draft: VisitDraft): boolean {
