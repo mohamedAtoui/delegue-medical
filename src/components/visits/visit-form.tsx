@@ -873,14 +873,13 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              Ajouter un nouveau{" "}
               {visitType === "focus"
-                ? focusAudienceType === "pharmacien" ? "une pharmacie" : focusAudienceType === "grossiste" ? "un grossiste" : "un médecin"
+                ? focusAudienceType === "pharmacien" ? "Ajouter une pharmacie" : focusAudienceType === "grossiste" ? "Ajouter un grossiste" : "Ajouter un médecin"
                 : visitType === "pharmacien"
-                ? "pharmacien"
+                ? "Ajouter un nouveau pharmacien"
                 : visitType === "grossiste"
-                ? "grossiste"
-                : "médecin"}
+                ? "Ajouter un nouveau grossiste"
+                : "Ajouter un nouveau médecin"}
             </DialogTitle>
           </DialogHeader>
           <DoctorForm
