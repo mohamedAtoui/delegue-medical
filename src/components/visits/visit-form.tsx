@@ -35,7 +35,7 @@ import {
   type SelectedGrossiste,
 } from "@/components/doctors/grossiste-combobox";
 import { toast } from "sonner";
-import { Send, Stethoscope, Pill, Truck, CalendarCheck, ChevronDown, Save } from "lucide-react";
+import { Send, Stethoscope, Pill, Truck, CalendarCheck, ChevronDown, Save, Presentation } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   Doctor,
@@ -104,6 +104,10 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
   const [timings, setTimings] = useState<VisitTiming[]>([]);
   const [timerReset, setTimerReset] = useState(0);
   const [answers, setAnswers] = useState<AnswersMap>({});
+  const [focusDoctorCount, setFocusDoctorCount] = useState("");
+  const [focusLieu, setFocusLieu] = useState("");
+  const [focusBudget, setFocusBudget] = useState("");
+  const [focusAnimateur, setFocusAnimateur] = useState("");
   const [questions, setQuestions] = useState<ProductQuestionWithProduct[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -131,6 +135,10 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
       setPlanNext(draft.planNext);
       setNextDeadline(draft.nextDeadline);
       setNextNote(draft.nextNote);
+      setFocusDoctorCount(draft.focusDoctorCount);
+      setFocusLieu(draft.focusLieu);
+      setFocusBudget(draft.focusBudget);
+      setFocusAnimateur(draft.focusAnimateur);
     }
     setDraftReady(true);
   }, [userId]);
@@ -140,6 +148,7 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
     const draft: VisitDraft = {
       visitType, productId, doctor, objective, compteRendu, engagement,
       grossistes, timings, answers, planNext, nextDeadline, nextNote,
+      focusDoctorCount, focusLieu, focusBudget, focusAnimateur,
     };
     setDraftSaved(saveVisitDraft(userId, draft));
     const saveOnExit = () => {
@@ -155,7 +164,8 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
       document.removeEventListener("visibilitychange", saveWhenHidden);
     };
   }, [userId, draftReady, visitType, productId, doctor, objective, compteRendu,
-    engagement, grossistes, timings, answers, planNext, nextDeadline, nextNote]);
+    engagement, grossistes, timings, answers, planNext, nextDeadline, nextNote,
+    focusDoctorCount, focusLieu, focusBudget, focusAnimateur]);
 
   const switchType = (t: VisitType) => {
     if (t === visitType) return;
@@ -166,6 +176,9 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
     setEngagement(null);
     setGrossistes([]);
     setTimings([]);
+    setPlanNext(false);
+    setNextDeadline("");
+    setNextNote("");
     setTimerReset((s) => s + 1);
   };
 
@@ -209,6 +222,7 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
     const draft: VisitDraft = {
       visitType, productId, doctor, objective, compteRendu, engagement,
       grossistes, timings, answers, planNext, nextDeadline, nextNote,
+      focusDoctorCount, focusLieu, focusBudget, focusAnimateur,
     };
     if (!hasVisitDraftContent(draft)) {
       toast.error("Renseignez au moins un élément avant de sauvegarder le brouillon");
@@ -229,7 +243,7 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
       toast.error("Veuillez sélectionner un produit");
       return;
     }
-    if (!doctor) {
+    if (visitType !== "focus" && !doctor) {
       const who =
         visitType === "pharmacien"
           ? "pharmacien"
@@ -239,7 +253,24 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
       toast.error(`Veuillez sélectionner un ${who}`);
       return;
     }
-    if (visitType === "medecin") {
+    if (visitType === "focus") {
+      if (!Number.isInteger(Number(focusDoctorCount)) || Number(focusDoctorCount) <= 0) {
+        toast.error("Indiquez le nombre de médecins présents");
+        return;
+      }
+      if (!focusLieu.trim() || !focusAnimateur.trim()) {
+        toast.error("Le lieu et l'animateur sont requis");
+        return;
+      }
+      if (!/^\d+(?:[.,]\d{1,2})?$/.test(focusBudget.trim())) {
+        toast.error("Indiquez un budget valide en DA");
+        return;
+      }
+      if (!compteRendu.trim()) {
+        toast.error("Le compte rendu est requis");
+        return;
+      }
+    } else if (visitType === "medecin") {
       if (!objective.trim()) {
         toast.error("L'objectif de la visite est requis");
         return;
@@ -307,13 +338,17 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
         visitType === "pharmacien" ? expandGrossisteSelection(grossistes) : [];
 
       const payload = {
-        doctor_id: doctor.id,
+        doctor_id: visitType === "focus" ? null : doctor!.id,
         product_id: visitType === "medecin" ? productId : null,
         visit_type: visitType,
         objective: visitType === "medecin" ? objective.trim() : null,
         compte_rendu: compteRendu.trim(),
         // Engagement applies to prescribers/pharmacies, not grossistes.
-        engagement: visitType === "grossiste" ? null : engagement,
+        engagement: visitType === "medecin" || visitType === "pharmacien" ? engagement : null,
+        focus_doctor_count: visitType === "focus" ? Number(focusDoctorCount) : null,
+        focus_lieu: visitType === "focus" ? focusLieu.trim() : null,
+        focus_budget: visitType === "focus" ? Number(focusBudget.trim().replace(",", ".")) : null,
+        focus_animateur: visitType === "focus" ? focusAnimateur.trim() : null,
         answers: answersPayload,
         grossistes: grossistesPayload,
         // Stage timings — médecin visits only.
@@ -387,6 +422,10 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
       setPlanNext(false);
       setNextDeadline("");
       setNextNote("");
+      setFocusDoctorCount("");
+      setFocusLieu("");
+      setFocusBudget("");
+      setFocusAnimateur("");
       onSuccess();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
@@ -414,7 +453,7 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
         {/* Type selector — drives whether a product picker is needed */}
         <div className="space-y-2">
           <Label>Type de visite *</Label>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <button
               type="button"
               onClick={() => switchType("medecin")}
@@ -440,6 +479,19 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
             >
               <Pill className="h-5 w-5" />
               Pharmacien
+            </button>
+            <button
+              type="button"
+              onClick={() => switchType("focus")}
+              className={cn(
+                "flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all cursor-pointer",
+                visitType === "focus"
+                  ? "border-primary bg-primary/5 text-primary font-semibold"
+                  : "border-border text-muted-foreground hover:border-primary/40"
+              )}
+            >
+              <Presentation className="h-5 w-5" />
+              Focus
             </button>
             <button
               type="button"
@@ -487,8 +539,36 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
           </div>
         )}
 
+        {/* Focus is a group event, not a doctor-directory contact. */}
+        {visitType === "focus" && (
+          <Card className="border-primary/20 bg-primary/[0.035]">
+            <CardContent className="grid gap-4 p-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="focus_doctor_count">Nombre de médecins présents *</Label>
+                <Input id="focus_doctor_count" type="number" min="1" step="1" inputMode="numeric"
+                  value={focusDoctorCount} onChange={(e) => setFocusDoctorCount(e.target.value)} placeholder="Ex. 12" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="focus_budget">Budget (DA) *</Label>
+                <Input id="focus_budget" type="text" inputMode="decimal"
+                  value={focusBudget} onChange={(e) => setFocusBudget(e.target.value)} placeholder="Ex. 15000" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="focus_lieu">Lieu *</Label>
+                <Input id="focus_lieu" value={focusLieu} onChange={(e) => setFocusLieu(e.target.value)}
+                  placeholder="Ex. Salle de conférence, Alger" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="focus_animateur">Animateur *</Label>
+                <Input id="focus_animateur" value={focusAnimateur} onChange={(e) => setFocusAnimateur(e.target.value)}
+                  placeholder="Nom de l'animateur" />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Doctor search */}
-        <div className="space-y-2">
+        {visitType !== "focus" && <div className="space-y-2">
           <Label>
             {visitType === "pharmacien"
               ? "Pharmacien *"
@@ -502,7 +582,7 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
             onCreateNew={() => setShowDoctorForm(true)}
             type={visitType}
           />
-        </div>
+        </div>}
 
         {/* Doctor visit history preview */}
         {doctor && (
@@ -529,14 +609,14 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
         {/* Compte rendu */}
         <div className="space-y-2">
           <Label htmlFor="compte_rendu">
-            {visitType === "medecin" ? "Compte rendu de la visite *" : "Commentaire *"}
+            {visitType === "medecin" || visitType === "focus" ? "Compte rendu de la visite *" : "Commentaire *"}
           </Label>
           <Textarea
             id="compte_rendu"
             value={compteRendu}
             onChange={(e) => setCompteRendu(e.target.value)}
             placeholder={
-              visitType === "medecin"
+              visitType === "medecin" || visitType === "focus"
                 ? "Décrivez le déroulement de la visite..."
                 : "Observations, remarques..."
             }
@@ -545,7 +625,7 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
         </div>
 
         {/* Engagement — médecin & pharmacien (not grossiste) */}
-        {visitType !== "grossiste" && (
+        {(visitType === "medecin" || visitType === "pharmacien") && (
           <div className="space-y-2">
             <Label>
               Engagement {visitType === "pharmacien" ? "du pharmacien" : "du médecin"}
@@ -714,7 +794,7 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
           </Button>
           <Button
             type="submit"
-            disabled={loading || !doctor || (visitType === "medecin" && !productId) || (planNext && !nextDeadline)}
+            disabled={loading || (visitType !== "focus" && !doctor) || (visitType === "medecin" && !productId) || (planNext && !nextDeadline)}
             className="w-full cursor-pointer sm:flex-1"
             size="lg"
           >
@@ -743,7 +823,7 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
             </DialogTitle>
           </DialogHeader>
           <DoctorForm
-            defaultType={visitType}
+            defaultType={visitType === "focus" ? "medecin" : visitType}
             onSuccess={(newDoctor) => {
               setDoctor(newDoctor);
               setShowDoctorForm(false);

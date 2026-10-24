@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
       from: searchParams.get("from"),
       to: searchParams.get("to"),
       type:
-        type === "medecin" || type === "pharmacien" || type === "grossiste"
+        type === "medecin" || type === "pharmacien" || type === "grossiste" || type === "focus"
           ? type
           : null,
       wilaya: searchParams.get("wilaya"),
@@ -109,8 +109,12 @@ export async function POST(request: NextRequest) {
     answers,
     grossistes,
     timings,
+    focus_doctor_count,
+    focus_lieu,
+    focus_budget,
+    focus_animateur,
   } = body as {
-    doctor_id?: string;
+    doctor_id?: string | null;
     product_id?: string;
     visit_type?: string;
     objective?: string;
@@ -119,37 +123,61 @@ export async function POST(request: NextRequest) {
     answers?: AnswerPayload[];
     grossistes?: GrossistePayload[];
     timings?: TimingPayload[];
+    focus_doctor_count?: number;
+    focus_lieu?: string;
+    focus_budget?: number;
+    focus_animateur?: string;
   };
 
-  if (!doctor_id) {
+  if (visit_type !== "focus" && !doctor_id) {
     return NextResponse.json({ error: "Le contact est requis" }, { status: 400 });
   }
   if (
     visit_type !== "medecin" &&
     visit_type !== "pharmacien" &&
-    visit_type !== "grossiste"
+    visit_type !== "grossiste" &&
+    visit_type !== "focus"
   ) {
     return NextResponse.json({ error: "Type de visite invalide" }, { status: 400 });
   }
-  // Product is required only for médecin visits. Pharmacien/grossiste visits
-  // carry no product (pharmacien answers are per-question; grossiste is just a
-  // compte rendu).
+  // Only médecin visits require a product; Focus is a contact-free event.
   if (visit_type === "medecin" && !product_id) {
     return NextResponse.json({ error: "Le produit est requis" }, { status: 400 });
   }
-  if (visit_type === "medecin" && (!objective || !compte_rendu)) {
+  if (visit_type === "medecin" &&
+      (typeof objective !== "string" || !objective.trim() ||
+       typeof compte_rendu !== "string" || !compte_rendu.trim())) {
     return NextResponse.json(
       { error: "Objectif et compte rendu requis pour un médecin" },
       { status: 400 }
     );
   }
-  if (visit_type !== "medecin" && !compte_rendu) {
+  if (visit_type !== "medecin" &&
+      (typeof compte_rendu !== "string" || !compte_rendu.trim())) {
     return NextResponse.json({ error: "Commentaire requis" }, { status: 400 });
   }
-  // Engagement, when provided, must be an integer 1–3. Grossiste visits carry
-  // no engagement.
+  if (visit_type === "focus") {
+    if (
+      !Number.isInteger(focus_doctor_count) ||
+      (focus_doctor_count ?? 0) <= 0 ||
+      typeof focus_lieu !== "string" ||
+      !focus_lieu.trim() ||
+      typeof focus_animateur !== "string" ||
+      !focus_animateur.trim() ||
+      typeof focus_budget !== "number" ||
+      !Number.isFinite(focus_budget) ||
+      focus_budget < 0 ||
+      focus_budget > 9999999999.99
+    ) {
+      return NextResponse.json(
+        { error: "Nombre de médecins, lieu, budget et animateur requis pour un Focus" },
+        { status: 400 }
+      );
+    }
+  }
+  // Engagement applies only to individual prescriber/pharmacy visits.
   let engagementValue: number | null = null;
-  if (visit_type !== "grossiste" && engagement != null) {
+  if ((visit_type === "medecin" || visit_type === "pharmacien") && engagement != null) {
     if (
       typeof engagement !== "number" ||
       !Number.isInteger(engagement) ||
@@ -174,12 +202,16 @@ export async function POST(request: NextRequest) {
     .from("visits")
     .insert({
       user_id: currentUser.id,
-      doctor_id,
-      product_id: product_id ?? null,
+      doctor_id: visit_type === "focus" ? null : doctor_id,
+      product_id: visit_type === "medecin" ? product_id : null,
       visit_type,
-      objective: objective || null,
-      compte_rendu: compte_rendu || null,
+      objective: visit_type === "medecin" ? objective?.trim() || null : null,
+      compte_rendu: compte_rendu?.trim() || null,
       engagement: engagementValue,
+      focus_doctor_count: visit_type === "focus" ? focus_doctor_count : null,
+      focus_lieu: visit_type === "focus" ? focus_lieu?.trim() : null,
+      focus_budget: visit_type === "focus" ? focus_budget : null,
+      focus_animateur: visit_type === "focus" ? focus_animateur?.trim() : null,
       // Legacy answer columns stay NULL for new visits — answers live in
       // visit_answers.
     })
@@ -293,25 +325,27 @@ export async function POST(request: NextRequest) {
   }
 
   // Auto-complete pending assignments for this doctor
-  const { data: pendingAssignments } = await supabase
-    .from("visit_assignments")
-    .select("id")
-    .eq("assignee_id", currentUser.id)
-    .eq("doctor_id", doctor_id)
-    .eq("status", "pending")
-    .order("deadline", { ascending: true })
-    .limit(1);
-
-  if (pendingAssignments && pendingAssignments.length > 0) {
-    await supabase
+  if (doctor_id && visit_type !== "focus") {
+    const { data: pendingAssignments } = await supabase
       .from("visit_assignments")
-      .update({
-        status: "completed",
-        completed_at: new Date().toISOString(),
-        visit_id: visit.id,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", pendingAssignments[0].id);
+      .select("id")
+      .eq("assignee_id", currentUser.id)
+      .eq("doctor_id", doctor_id)
+      .eq("status", "pending")
+      .order("deadline", { ascending: true })
+      .limit(1);
+
+    if (pendingAssignments && pendingAssignments.length > 0) {
+      await supabase
+        .from("visit_assignments")
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+          visit_id: visit.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", pendingAssignments[0].id);
+    }
   }
 
   return NextResponse.json(visit, { status: 201 });

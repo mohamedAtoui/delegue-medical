@@ -20,6 +20,7 @@ import {
   ImagePlus,
   CalendarPlus,
   Truck,
+  Presentation,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -535,9 +536,10 @@ export function VisitEntry({
   }, [isHighlightTarget]);
   const isPharm = visit.visit_type === "pharmacien";
   const isGross = visit.visit_type === "grossiste";
+  const isFocus = visit.visit_type === "focus";
   const isPrescriber = visit.visit_type === "medecin";
-  const HeaderIcon = isGross ? Truck : isPrescriber ? Stethoscope : Pill;
-  const headerAccent = !isPrescriber;
+  const HeaderIcon = isFocus ? Presentation : isGross ? Truck : isPrescriber ? Stethoscope : Pill;
+  const headerAccent = !isPrescriber && !isFocus;
   const isHighlighted =
     !highlightUserId || visit.user_id === highlightUserId;
 
@@ -626,6 +628,13 @@ export function VisitEntry({
         )}
         <div className="flex-1 min-w-0">
           {/* Doctor info line */}
+          {isFocus && (
+            <div className="mb-0.5 flex min-w-0 items-center gap-2">
+              <span className="truncate text-sm font-semibold text-primary">
+                Focus{visit.focus_lieu ? ` · ${visit.focus_lieu}` : ""}
+              </span>
+            </div>
+          )}
           {showDoctor && visit.doctor && (
             <div className="flex items-center gap-2 mb-0.5">
               {showUser && (
@@ -700,7 +709,9 @@ export function VisitEntry({
             >
               {visit.objective ||
                 visit.compte_rendu ||
-                (isGross
+                (isFocus
+                  ? "Réunion Focus"
+                  : isGross
                   ? "Visite grossiste"
                   : isPharm
                   ? "Visite pharmacien"
@@ -768,6 +779,14 @@ export function VisitEntry({
           )}
 
           {/* Compte rendu */}
+          {isFocus && (
+            <div className="grid grid-cols-2 gap-2 rounded-lg bg-primary/[0.04] p-3 text-xs sm:grid-cols-4">
+              <div><span className="block text-muted-foreground">Médecins présents</span><strong>{visit.focus_doctor_count ?? "—"}</strong></div>
+              <div><span className="block text-muted-foreground">Lieu</span><strong>{visit.focus_lieu || "—"}</strong></div>
+              <div><span className="block text-muted-foreground">Budget</span><strong>{visit.focus_budget != null ? `${new Intl.NumberFormat("fr-DZ").format(visit.focus_budget)} DA` : "—"}</strong></div>
+              <div><span className="block text-muted-foreground">Animateur</span><strong>{visit.focus_animateur || "—"}</strong></div>
+            </div>
+          )}
           {visit.compte_rendu && (
             <div className="flex items-start gap-1.5">
               <FileText className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
@@ -832,7 +851,7 @@ export function VisitEntry({
           })()}
 
           {/* Legacy médecin evaluation summary (pre-migration visits) */}
-          {!hasDynamicAnswers && !isPharm && answeredCount > 0 && (
+          {!hasDynamicAnswers && isPrescriber && answeredCount > 0 && (
             <div className="flex flex-wrap gap-x-3 gap-y-1 pl-4 pt-1">
               <MiniYesNo value={visit.synapgen_solves} label="Synapgen résout" />
               <MiniYesNo
@@ -938,7 +957,7 @@ export function VisitEntry({
           <InlineComments
             visitId={visit.id}
             visitAuthorId={visit.user_id}
-            doctorId={visit.doctor_id}
+            doctorId={visit.doctor_id ?? undefined}
             doctorName={
               visit.doctor
                 ? `${visit.doctor.last_name} ${visit.doctor.first_name}`.trim()

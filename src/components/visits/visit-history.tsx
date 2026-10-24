@@ -2,15 +2,16 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { DoctorVisitGroup } from "./visit-card";
+import { VisitEntry } from "./visit-entry";
 import { Button } from "@/components/ui/button";
 import { MedicalLoader } from "@/components/ui/medical-loader";
-import type { VisitWithDetails, DoctorType, Potentiel } from "@/types";
+import type { VisitWithDetails, DoctorType, VisitType, Potentiel } from "@/types";
 
 interface VisitHistoryProps {
   refreshKey?: number;
   showUser?: boolean;
   fetchUrl?: string;
-  typeFilter?: "all" | DoctorType;
+  typeFilter?: "all" | VisitType;
   from?: string;
   to?: string;
   wilaya?: string;
@@ -31,25 +32,26 @@ interface DoctorGroup {
   commune: string | null;
   address: string | null;
   potentiel: Potentiel | null;
-  doctorType: DoctorType;
+  doctorType: DoctorType | "focus";
   visits: VisitWithDetails[];
 }
 
 function groupByDoctor(visits: VisitWithDetails[]): DoctorGroup[] {
   const groupMap = new Map<string, DoctorGroup>();
   for (const visit of visits) {
-    const doctorId = visit.doctor_id;
+    const doctorId = visit.doctor_id ?? `focus:${visit.id}`;
     if (!groupMap.has(doctorId)) {
+      const isFocus = visit.visit_type === "focus";
       const isPrescriber = visit.doctor?.doctor_type === "medecin";
       groupMap.set(doctorId, {
         doctorId,
-        doctorName: `${isPrescriber ? "Dr. " : ""}${visit.doctor?.last_name || ""} ${visit.doctor?.first_name || ""}`.trim(),
+        doctorName: isFocus ? `Focus · ${visit.focus_lieu || "Sans lieu"}` : `${isPrescriber ? "Dr. " : ""}${visit.doctor?.last_name || ""} ${visit.doctor?.first_name || ""}`.trim(),
         specialty: visit.doctor?.specialty || null,
         wilaya: visit.doctor?.wilaya || "",
         commune: visit.doctor?.commune || null,
         address: visit.doctor?.address || null,
         potentiel: visit.doctor?.potentiel ?? null,
-        doctorType: (visit.doctor?.doctor_type || "medecin") as DoctorType,
+        doctorType: isFocus ? "focus" : (visit.doctor?.doctor_type || "medecin") as DoctorType,
         visits: [],
       });
     }
@@ -147,7 +149,10 @@ export function VisitHistory({
     <div className="relative space-y-3">
       {loading && <MedicalLoader variant="overlay" />}
 
-      {groups.map((group) => (
+      {groups.map((group) => group.doctorType === "focus" ? (
+        <VisitEntry key={group.doctorId} visit={group.visits[0]} showDoctor showUser={showUser}
+          userRole={userRole} highlightVisitId={highlightVisitId} onDelete={handleVisitDelete} />
+      ) : (
         <DoctorVisitGroup
           key={group.doctorId}
           doctorId={group.doctorId}

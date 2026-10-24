@@ -8,6 +8,7 @@ import {
   Stethoscope,
   Pill,
   Truck,
+  Presentation,
   Users,
   X,
   FilePenLine,
@@ -53,9 +54,9 @@ import {
 } from "@/lib/visits/visit-draft";
 import { CloudOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { DoctorType, User, UserRole, VisitWithDetails } from "@/types";
+import type { VisitType, User, UserRole, VisitWithDetails } from "@/types";
 
-type TypeFilter = "" | DoctorType;
+type TypeFilter = "" | VisitType;
 
 interface VisitesClientProps {
   role: UserRole;
@@ -233,6 +234,8 @@ export function VisitesClient({ role, userId, initialVisits, initialTotal }: Vis
                 <p className="truncate font-semibold text-foreground">
                   {draft.doctor
                     ? `${draft.doctor.first_name} ${draft.doctor.last_name}`
+                    : draft.visitType === "focus"
+                      ? `Focus${draft.focusLieu ? ` · ${draft.focusLieu}` : ""}`
                     : draft.visitType === "pharmacien"
                       ? "Pharmacien à sélectionner"
                       : draft.visitType === "grossiste"
@@ -240,7 +243,7 @@ export function VisitesClient({ role, userId, initialVisits, initialTotal }: Vis
                         : "Médecin à sélectionner"}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {draft.visitType === "medecin" ? "Médecin" : draft.visitType === "pharmacien" ? "Pharmacien" : "Grossiste"}
+                  {draft.visitType === "medecin" ? "Médecin" : draft.visitType === "pharmacien" ? "Pharmacien" : draft.visitType === "focus" ? "Focus" : "Grossiste"}
                   {draft.doctor?.wilaya ? ` · ${draft.doctor.wilaya}` : ""}
                   {Number.isFinite(Date.parse(draft.savedAt))
                     ? ` · Sauvegardé le ${new Intl.DateTimeFormat("fr-DZ", { dateStyle: "medium", timeStyle: "short" }).format(new Date(draft.savedAt))}`
@@ -354,11 +357,18 @@ export function VisitesClient({ role, userId, initialVisits, initialTotal }: Vis
         {/* Type tabs */}
         <FilterTabs<TypeFilter>
           value={typeFilter}
-          onChange={setTypeFilter}
+          onChange={(next) => {
+            setTypeFilter(next);
+            if (next === "focus") {
+              setWilayaFilter("");
+              setCommuneFilter("");
+            }
+          }}
           options={[
             { value: "", label: "Toutes", icon: Users },
             { value: "medecin", label: "Médecins", icon: Stethoscope },
             { value: "pharmacien", label: "Pharmaciens", icon: Pill },
+            { value: "focus", label: "Focus", icon: Presentation },
             { value: "grossiste", label: "Grossistes", icon: Truck },
           ]}
         />
@@ -367,7 +377,7 @@ export function VisitesClient({ role, userId, initialVisits, initialTotal }: Vis
         <SearchInput
           value={searchInput}
           onChange={setSearchInput}
-          placeholder="Rechercher par nom du médecin ou pharmacien…"
+          placeholder={typeFilter === "focus" ? "Rechercher un lieu ou un animateur…" : "Rechercher par nom du contact…"}
         />
 
         {/* Filter row */}
@@ -376,7 +386,7 @@ export function VisitesClient({ role, userId, initialVisits, initialTotal }: Vis
 
           {isSupervisor ? (
             <div className="grid gap-2 grid-cols-1 sm:grid-cols-3">
-              <WilayaSelect
+              {typeFilter !== "focus" && <WilayaSelect
                 value={wilayaFilter}
                 onValueChange={(v) => {
                   setWilayaFilter(v);
@@ -385,13 +395,13 @@ export function VisitesClient({ role, userId, initialVisits, initialTotal }: Vis
                 }}
                 placeholder="Toutes les wilayas"
                 showAll
-              />
+              />}
 
-              <CommuneFilter
+              {typeFilter !== "focus" && <CommuneFilter
                 value={communeFilter}
                 onChange={setCommuneFilter}
                 wilaya={wilayaFilter || undefined}
-              />
+              />}
 
               <Select
                 value={delegueFilter}
@@ -412,7 +422,7 @@ export function VisitesClient({ role, userId, initialVisits, initialTotal }: Vis
           ) : (
             /* Délégués: commune filter only — wilayas are already scoped to
                their territory server-side. */
-            <CommuneFilter value={communeFilter} onChange={setCommuneFilter} />
+            typeFilter !== "focus" && <CommuneFilter value={communeFilter} onChange={setCommuneFilter} />
           )}
         </div>
 

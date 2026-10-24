@@ -165,6 +165,49 @@ describe("/api/visits POST", () => {
     expect(res.status).toBe(201);
   });
 
+  it("creates a Focus without a doctor and stores its structured fields", async () => {
+    mockAuth.mockResolvedValue({ userId: "clerk_d" });
+    mockGetOrCreateUser.mockResolvedValue(fakeDelegue);
+    const supa = makeSupabase({
+      visits: { data: { id: "f1", doctor_id: null, visit_type: "focus", doctor: null, user: fakeDelegue }, error: null },
+    });
+    mockCreateClient.mockResolvedValue(supa);
+    const { POST } = await import("./route");
+    const res = await POST(makeRequest("http://x/api/visits", {
+      method: "POST",
+      json: {
+        visit_type: "focus",
+        focus_doctor_count: 12,
+        focus_lieu: "Alger",
+        focus_budget: 15000,
+        focus_animateur: "Amina",
+        compte_rendu: "Présentation collective",
+      },
+    }) as never);
+    expect(res.status).toBe(201);
+    const visitsBuilder = supa._fromMock.mock.results[0].value;
+    expect(visitsBuilder.insert).toHaveBeenCalledWith(expect.objectContaining({
+      doctor_id: null,
+      visit_type: "focus",
+      focus_doctor_count: 12,
+      focus_lieu: "Alger",
+      focus_budget: 15000,
+      focus_animateur: "Amina",
+    }));
+    expect(supa._fromMock).not.toHaveBeenCalledWith("visit_assignments");
+  });
+
+  it("rejects an incomplete Focus", async () => {
+    mockAuth.mockResolvedValue({ userId: "clerk_d" });
+    const { POST } = await import("./route");
+    const res = await POST(makeRequest("http://x/api/visits", {
+      method: "POST",
+      json: { visit_type: "focus", compte_rendu: "Réunion", focus_lieu: "Alger", focus_budget: -1 },
+    }) as never);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/focus/i);
+  });
+
   it("rejects an out-of-range engagement", async () => {
     mockAuth.mockResolvedValue({ userId: "clerk_d" });
     const { POST } = await import("./route");

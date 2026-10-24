@@ -42,7 +42,7 @@ export async function GET() {
       supabase
         .from("visit_comments")
         .select(
-          "*, user:users(first_name, last_name), visit:visits(created_at, doctor:doctors!visits_doctor_id_fkey(first_name, last_name))"
+          "*, user:users(first_name, last_name), visit:visits(created_at, visit_type, doctor:doctors!visits_doctor_id_fkey(first_name, last_name))"
         )
         .order("created_at", { ascending: false }),
     ]);
@@ -83,6 +83,9 @@ export async function GET() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const visitsData = (visitsRes.data || []).map((v: any) => {
     const isPharm = v.visit_type === "pharmacien";
+    const typeLabel: Record<string, string> = {
+      medecin: "Médecin", pharmacien: "Pharmacien", grossiste: "Grossiste", focus: "Focus",
+    };
     const d = v.doctor || {};
     const u = v.user || {};
     return {
@@ -96,9 +99,13 @@ export async function GET() {
           })
         : "",
       Délégué: `${u.first_name || ""} ${u.last_name || ""}`.trim(),
-      Type: isPharm ? "Pharmacien" : "Médecin",
-      Cible: `${isPharm ? "" : "Dr. "}${d.last_name || ""} ${d.first_name || ""}`.trim(),
+      Type: typeLabel[v.visit_type] || v.visit_type,
+      Cible: v.visit_type === "focus" ? "Focus" : `${v.visit_type === "medecin" ? "Dr. " : ""}${d.last_name || ""} ${d.first_name || ""}`.trim(),
       Wilaya: d.wilaya || "",
+      "Médecins présents (Focus)": v.focus_doctor_count ?? "",
+      "Lieu (Focus)": v.focus_lieu || "",
+      "Budget DA (Focus)": v.focus_budget ?? "",
+      "Animateur (Focus)": v.focus_animateur || "",
       Objectif: v.objective || "",
       "Compte rendu / Commentaire": v.compte_rendu || "",
       "Synapgen résout les besoins": yn(v.synapgen_solves),
@@ -142,7 +149,7 @@ export async function GET() {
       "Visite (date)": v.created_at
         ? new Date(v.created_at).toLocaleDateString("fr-FR")
         : "",
-      Médecin: `${d.last_name || ""} ${d.first_name || ""}`.trim(),
+      Médecin: `${d.last_name || ""} ${d.first_name || ""}`.trim() || (v.visit_type === "focus" ? "Focus" : ""),
       Auteur: `${u.first_name || ""} ${u.last_name || ""}`.trim(),
       Commentaire: c.content || "",
     };

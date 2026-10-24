@@ -50,7 +50,7 @@ export async function fetchDashboardStats(
     .select("doctor_id")
     .gte("created_at", from)
     .lte("created_at", to);
-  const doctorsVisited = new Set(doctorsVisitedData?.map((v) => v.doctor_id))
+  const doctorsVisited = new Set(doctorsVisitedData?.map((v) => v.doctor_id).filter(Boolean))
     .size;
 
   const { data: visits } = await supabase
