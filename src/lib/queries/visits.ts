@@ -150,6 +150,23 @@ export async function fetchVisits(opts: VisitQueryOptions): Promise<VisitsResult
       });
     }
 
+    if (data.some((visit) => visit.visit_type === "focus")) {
+      const { data: focusContacts, error: focusContactsError } = await supabase
+        .from("focus_visit_contacts")
+        .select("visit_id, doctor_id, doctor:doctors(id, first_name, last_name, doctor_type, wilaya)")
+        .in("visit_id", visitIds);
+      if (focusContactsError) throw new Error(focusContactsError.message);
+      const byVisit = new Map<string, unknown[]>();
+      focusContacts?.forEach((row) => {
+        const list = byVisit.get(row.visit_id) || [];
+        list.push(row);
+        byVisit.set(row.visit_id, list);
+      });
+      data.forEach((visit) => {
+        (visit as Record<string, unknown>).focus_visit_contacts = byVisit.get(visit.id) || [];
+      });
+    }
+
     // Stage timings — fetched separately so a missing table (before migration
     // 024 is applied) or a relationship hiccup can never break the visits list.
     const { data: vt } = await supabase

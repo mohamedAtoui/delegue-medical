@@ -47,10 +47,11 @@ interface DoctorFormProps {
   onDelete?: () => void;
   initialData?: DoctorWithGrossistes | null;
   defaultType?: DoctorType;
+  lockType?: boolean;
   userRole?: string;
 }
 
-export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, defaultType, userRole }: DoctorFormProps) {
+export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, defaultType, lockType = false, userRole }: DoctorFormProps) {
   const [loading, setLoading] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -211,7 +212,7 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Type selector */}
-      <div className="space-y-2">
+      {!lockType && <div className="space-y-2">
         <Label>Type *</Label>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <button
@@ -254,7 +255,7 @@ export function DoctorForm({ onSuccess, onCancel, onDelete, initialData, default
             Grossiste
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* Names */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

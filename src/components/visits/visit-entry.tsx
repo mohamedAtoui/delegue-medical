@@ -780,11 +780,22 @@ export function VisitEntry({
 
           {/* Compte rendu */}
           {isFocus && (
-            <div className="grid grid-cols-2 gap-2 rounded-lg bg-primary/[0.04] p-3 text-xs sm:grid-cols-4">
-              <div><span className="block text-muted-foreground">Médecins présents</span><strong>{visit.focus_doctor_count ?? "—"}</strong></div>
+            <div className="space-y-3 rounded-lg bg-primary/[0.04] p-3 text-xs">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div><span className="block text-muted-foreground">{visit.focus_audience_type === "pharmacien" ? "Pharmaciens" : visit.focus_audience_type === "grossiste" ? "Grossistes" : "Médecins"} présents</span><strong>{visit.focus_doctor_count ?? "—"}</strong></div>
               <div><span className="block text-muted-foreground">Lieu</span><strong>{visit.focus_lieu || "—"}</strong></div>
               <div><span className="block text-muted-foreground">Budget</span><strong>{visit.focus_budget != null ? `${new Intl.NumberFormat("fr-DZ").format(visit.focus_budget)} DA` : "—"}</strong></div>
               <div><span className="block text-muted-foreground">Animateur</span><strong>{visit.focus_animateur || "—"}</strong></div>
+              </div>
+              {visit.focus_visit_contacts && visit.focus_visit_contacts.length > 0 && <div className="border-t border-primary/10 pt-2">
+                <span className="font-semibold text-foreground/70">Participants identifiés</span>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {visit.focus_visit_contacts.map(({ doctor: contact }) => <Link key={contact.id} href={`/medecins/${contact.id}`} onClick={(event) => event.stopPropagation()}
+                    className="rounded-full border border-primary/15 bg-background px-2.5 py-1 font-medium hover:border-primary hover:text-primary">
+                    {contact.doctor_type === "medecin" ? "Dr. " : ""}{contact.last_name} {contact.first_name}
+                  </Link>)}
+                </div>
+              </div>}
             </div>
           )}
           {visit.compte_rendu && (

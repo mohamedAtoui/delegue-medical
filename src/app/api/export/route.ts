@@ -49,6 +49,22 @@ export async function GET() {
 
   const wb = XLSX.utils.book_new();
 
+  const focusVisitIds = (visitsRes.data || []).filter((visit) => visit.visit_type === "focus").map((visit) => visit.id);
+  const { data: focusContacts, error: focusContactsError } = focusVisitIds.length
+    ? await supabase.from("focus_visit_contacts")
+        .select("visit_id, doctor:doctors(first_name, last_name, doctor_type)")
+        .in("visit_id", focusVisitIds)
+    : { data: [], error: null };
+  if (focusContactsError) return NextResponse.json({ error: focusContactsError.message }, { status: 500 });
+  const focusNames = new Map<string, string[]>();
+  for (const row of focusContacts || []) {
+    const contact = Array.isArray(row.doctor) ? row.doctor[0] : row.doctor;
+    if (!contact) continue;
+    const names = focusNames.get(row.visit_id) || [];
+    names.push(`${contact.doctor_type === "medecin" ? "Dr. " : ""}${contact.last_name} ${contact.first_name}`.trim());
+    focusNames.set(row.visit_id, names);
+  }
+
   // Build wilaya map for users
   const wilayaMap = new Map<string, string[]>();
   territoriesRes.data?.forEach((t) => {
@@ -60,7 +76,7 @@ export async function GET() {
   const doctorsData = (doctorsRes.data || []).map((d) => ({
     Nom: d.last_name,
     Prénom: d.first_name,
-    Type: d.doctor_type === "pharmacien" ? "Pharmacien" : "Médecin",
+    Type: d.doctor_type === "pharmacien" ? "Pharmacien" : d.doctor_type === "grossiste" ? "Grossiste" : "Médecin",
     Spécialité: d.specialty || "",
     Wilaya: d.wilaya,
     Adresse: d.address || "",
@@ -82,7 +98,6 @@ export async function GET() {
   // Sheet 2: Visites (structured)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const visitsData = (visitsRes.data || []).map((v: any) => {
-    const isPharm = v.visit_type === "pharmacien";
     const typeLabel: Record<string, string> = {
       medecin: "Médecin", pharmacien: "Pharmacien", grossiste: "Grossiste", focus: "Focus",
     };
@@ -102,7 +117,9 @@ export async function GET() {
       Type: typeLabel[v.visit_type] || v.visit_type,
       Cible: v.visit_type === "focus" ? "Focus" : `${v.visit_type === "medecin" ? "Dr. " : ""}${d.last_name || ""} ${d.first_name || ""}`.trim(),
       Wilaya: d.wilaya || "",
-      "Médecins présents (Focus)": v.focus_doctor_count ?? "",
+      "Participants présents (Focus)": v.focus_doctor_count ?? "",
+      "Public (Focus)": v.focus_audience_type === "medecin" ? "Médecins" : v.focus_audience_type === "pharmacien" ? "Pharmacies" : v.focus_audience_type === "grossiste" ? "Grossistes" : "",
+      "Participants identifiés (Focus)": (focusNames.get(v.id) || []).join(", "),
       "Lieu (Focus)": v.focus_lieu || "",
       "Budget DA (Focus)": v.focus_budget ?? "",
       "Animateur (Focus)": v.focus_animateur || "",

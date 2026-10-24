@@ -40,6 +40,8 @@ const draft: VisitDraft = {
   focusLieu: "",
   focusBudget: "",
   focusAnimateur: "",
+  focusAudienceType: "",
+  focusContacts: [],
 };
 
 let originalStorage: PropertyDescriptor | undefined;

@@ -1,4 +1,4 @@
-import type { Doctor, VisitTiming, VisitType } from "@/types";
+import type { Doctor, DoctorType, VisitTiming, VisitType } from "@/types";
 import type { SelectedGrossiste } from "@/components/doctors/grossiste-combobox";
 
 const DRAFT_VERSION = 1;
@@ -25,6 +25,8 @@ export interface VisitDraft {
   focusLieu: string;
   focusBudget: string;
   focusAnimateur: string;
+  focusAudienceType: DoctorType | "";
+  focusContacts: Doctor[];
 }
 
 type StoredDraft = VisitDraft & { version: number; savedAt: string };
@@ -63,7 +65,9 @@ export function hasVisitDraftContent(draft: VisitDraft): boolean {
     !!draft.focusDoctorCount ||
     !!draft.focusLieu ||
     !!draft.focusBudget ||
-    !!draft.focusAnimateur
+    !!draft.focusAnimateur ||
+    !!draft.focusAudienceType ||
+    draft.focusContacts.length > 0
   );
 }
 
@@ -102,6 +106,12 @@ export function readVisitDraftRecord(userId: string): VisitDraftRecord | null {
       focusLieu: typeof draft.focusLieu === "string" ? draft.focusLieu : "",
       focusBudget: typeof draft.focusBudget === "string" ? draft.focusBudget : "",
       focusAnimateur: typeof draft.focusAnimateur === "string" ? draft.focusAnimateur : "",
+      focusAudienceType: ["medecin", "pharmacien", "grossiste"].includes(draft.focusAudienceType)
+        ? draft.focusAudienceType : "",
+      focusContacts: Array.isArray(draft.focusContacts)
+        ? draft.focusContacts.filter((contact) => contact && typeof contact.id === "string" &&
+            contact.doctor_type === draft.focusAudienceType)
+        : [],
     };
   } catch {
     return null;
