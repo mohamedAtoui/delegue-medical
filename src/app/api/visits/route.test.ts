@@ -181,6 +181,8 @@ describe("/api/visits POST", () => {
         focus_lieu: "Alger",
         focus_budget: 15000,
         focus_animateur: "Amina",
+        focus_audience_type: "medecin",
+        focus_contact_ids: [],
         compte_rendu: "Présentation collective",
       },
     }) as never);
@@ -193,6 +195,7 @@ describe("/api/visits POST", () => {
       focus_lieu: "Alger",
       focus_budget: 15000,
       focus_animateur: "Amina",
+      focus_audience_type: "medecin",
     }));
     expect(supa._fromMock).not.toHaveBeenCalledWith("visit_assignments");
   });
@@ -206,6 +209,45 @@ describe("/api/visits POST", () => {
     }) as never);
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/focus/i);
+  });
+
+  it("links selected contacts to a Focus", async () => {
+    const contactId = "11111111-1111-4111-8111-111111111111";
+    mockAuth.mockResolvedValue({ userId: "clerk_d" });
+    mockGetOrCreateUser.mockResolvedValue(fakeDelegue);
+    const supa = makeSupabase({
+      doctors: { data: [{ id: contactId, doctor_type: "pharmacien" }], error: null },
+      visits: { data: { id: "f2", doctor_id: null, visit_type: "focus", user: fakeDelegue }, error: null },
+      focus_visit_contacts: { data: null, error: null },
+    });
+    mockCreateClient.mockResolvedValue(supa);
+    const { POST } = await import("./route");
+    const res = await POST(makeRequest("http://x/api/visits", { method: "POST", json: {
+      visit_type: "focus", focus_audience_type: "pharmacien", focus_contact_ids: [contactId],
+      focus_doctor_count: 5, focus_lieu: "Oran", focus_budget: 1000,
+      focus_animateur: "Amina", compte_rendu: "Réunion",
+    } }) as never);
+    expect(res.status).toBe(201);
+    expect(supa._fromMock).toHaveBeenCalledWith("focus_visit_contacts");
+    const linkBuilder = supa._fromMock.mock.results.find((_, i) =>
+      supa._fromMock.mock.calls[i][0] === "focus_visit_contacts")?.value;
+    expect(linkBuilder.insert).toHaveBeenCalledWith([{ visit_id: "f2", doctor_id: contactId }]);
+  });
+
+  it("rejects contacts outside the selected Focus audience", async () => {
+    const contactId = "11111111-1111-4111-8111-111111111111";
+    mockAuth.mockResolvedValue({ userId: "clerk_d" });
+    mockGetOrCreateUser.mockResolvedValue(fakeDelegue);
+    const supa = makeSupabase({ doctors: { data: [{ id: contactId, doctor_type: "medecin" }], error: null } });
+    mockCreateClient.mockResolvedValue(supa);
+    const { POST } = await import("./route");
+    const res = await POST(makeRequest("http://x/api/visits", { method: "POST", json: {
+      visit_type: "focus", focus_audience_type: "pharmacien", focus_contact_ids: [contactId],
+      focus_doctor_count: 5, focus_lieu: "Oran", focus_budget: 1000,
+      focus_animateur: "Amina", compte_rendu: "Réunion",
+    } }) as never);
+    expect(res.status).toBe(400);
+    expect(supa._fromMock).not.toHaveBeenCalledWith("visits");
   });
 
   it("rejects an out-of-range engagement", async () => {

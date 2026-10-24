@@ -34,6 +34,8 @@ const draft: VisitDraft = {
   focusLieu: "",
   focusBudget: "",
   focusAnimateur: "",
+  focusAudienceType: "",
+  focusContacts: [],
 };
 
 beforeEach(() => {
@@ -97,9 +99,20 @@ describe("visit draft persistence", () => {
       focusLieu: "Alger",
       focusBudget: "15000,50",
       focusAnimateur: "Amina",
+      focusAudienceType: "medecin",
+      focusContacts: [doctor],
     };
     saveVisitDraft("user-1", focus);
     expect(readVisitDraft("user-1")).toEqual(expect.objectContaining(focus));
+  });
+
+  it("restores older Focus drafts without an audience or contacts", () => {
+    const legacy = { ...draft, visitType: "focus" as const, doctor: null, productId: "" };
+    const oldFields: Partial<VisitDraft> = { ...legacy };
+    delete oldFields.focusAudienceType;
+    delete oldFields.focusContacts;
+    window.localStorage.setItem("handson.visitDraft.v1.user-1", JSON.stringify({ ...oldFields, version: 1, savedAt: new Date().toISOString() }));
+    expect(readVisitDraft("user-1")).toEqual(expect.objectContaining({ focusAudienceType: "", focusContacts: [] }));
   });
 
   it("does not keep an empty visit, and clears only after saving", () => {
@@ -123,6 +136,8 @@ describe("visit draft persistence", () => {
       focusLieu: "",
       focusBudget: "",
       focusAnimateur: "",
+      focusAudienceType: "",
+      focusContacts: [],
     });
     expect(readVisitDraft("user-1")).toBeNull();
   });

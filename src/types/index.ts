@@ -139,6 +139,7 @@ export interface Visit {
   focus_lieu: string | null;
   focus_budget: number | null;
   focus_animateur: string | null;
+  focus_audience_type: DoctorType | null;
   /** Engagement (1–5) captured at this visit; feeds the doctor's average. */
   engagement: number | null;
   // Legacy médecin checklist — kept for pre-migration visits; new visits
@@ -171,6 +172,7 @@ export interface VisitWithDetails extends Visit {
   visit_answers?: VisitAnswer[];
   visit_grossistes?: VisitGrossiste[];
   visit_timings?: VisitTiming[];
+  focus_visit_contacts?: { visit_id: string; doctor_id: string; doctor: Pick<Doctor, "id" | "first_name" | "last_name" | "doctor_type" | "wilaya"> }[];
 }
 
 /** The three optional timed stages of a médecin visit. */

@@ -113,6 +113,8 @@ export async function POST(request: NextRequest) {
     focus_lieu,
     focus_budget,
     focus_animateur,
+    focus_audience_type,
+    focus_contact_ids,
   } = body as {
     doctor_id?: string | null;
     product_id?: string;
@@ -127,6 +129,8 @@ export async function POST(request: NextRequest) {
     focus_lieu?: string;
     focus_budget?: number;
     focus_animateur?: string;
+    focus_audience_type?: string;
+    focus_contact_ids?: string[];
   };
 
   if (visit_type !== "focus" && !doctor_id) {
@@ -157,6 +161,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Commentaire requis" }, { status: 400 });
   }
   if (visit_type === "focus") {
+    if (focus_audience_type !== "medecin" && focus_audience_type !== "pharmacien" && focus_audience_type !== "grossiste") {
+      return NextResponse.json({ error: "Choisissez le public du Focus" }, { status: 400 });
+    }
+    if (!Array.isArray(focus_contact_ids) || focus_contact_ids.length > 100 ||
+      focus_contact_ids.some((id) => typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) ||
+      new Set(focus_contact_ids).size !== focus_contact_ids.length) {
+      return NextResponse.json({ error: "Liste de participants invalide" }, { status: 400 });
+    }
+    if (typeof focus_doctor_count === "number" && focus_contact_ids.length > focus_doctor_count) {
+      return NextResponse.json({ error: "La liste dépasse le nombre de participants présents" }, { status: 400 });
+    }
     if (
       !Number.isInteger(focus_doctor_count) ||
       (focus_doctor_count ?? 0) <= 0 ||
@@ -170,7 +185,7 @@ export async function POST(request: NextRequest) {
       focus_budget > 9999999999.99
     ) {
       return NextResponse.json(
-        { error: "Nombre de médecins, lieu, budget et animateur requis pour un Focus" },
+        { error: "Nombre de participants, lieu, budget et animateur requis pour un Focus" },
         { status: 400 }
       );
     }
@@ -198,6 +213,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Utilisateur non trouvé" }, { status: 404 });
   }
 
+  // The list is optional, but selected contacts must belong to this Focus audience.
+  if (visit_type === "focus" && focus_contact_ids && focus_contact_ids.length > 0) {
+    const { data: contacts, error: contactsError } = await supabase
+      .from("doctors").select("id, doctor_type").in("id", focus_contact_ids);
+    if (contactsError || !contacts || contacts.length !== focus_contact_ids.length ||
+      contacts.some((contact) => contact.doctor_type !== focus_audience_type)) {
+      return NextResponse.json({ error: "Certains participants ne correspondent pas au public choisi" }, { status: 400 });
+    }
+  }
+
   const { data: visit, error: visitError } = await supabase
     .from("visits")
     .insert({
@@ -212,6 +237,7 @@ export async function POST(request: NextRequest) {
       focus_lieu: visit_type === "focus" ? focus_lieu?.trim() : null,
       focus_budget: visit_type === "focus" ? focus_budget : null,
       focus_animateur: visit_type === "focus" ? focus_animateur?.trim() : null,
+      focus_audience_type: visit_type === "focus" ? focus_audience_type : null,
       // Legacy answer columns stay NULL for new visits — answers live in
       // visit_answers.
     })
@@ -223,6 +249,16 @@ export async function POST(request: NextRequest) {
       { error: visitError?.message ?? "Erreur lors de la création de la visite" },
       { status: 500 }
     );
+  }
+
+  if (visit_type === "focus" && focus_contact_ids && focus_contact_ids.length > 0) {
+    const { error: contactsError } = await supabase.from("focus_visit_contacts").insert(
+      focus_contact_ids.map((id) => ({ visit_id: visit.id, doctor_id: id }))
+    );
+    if (contactsError) {
+      await supabase.from("visits").delete().eq("id", visit.id);
+      return NextResponse.json({ error: `Impossible de lier les participants : ${contactsError.message}` }, { status: 500 });
+    }
   }
 
   // Persist answers. If this fails, remove the visit we just inserted so

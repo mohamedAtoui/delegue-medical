@@ -35,10 +35,11 @@ import {
   type SelectedGrossiste,
 } from "@/components/doctors/grossiste-combobox";
 import { toast } from "sonner";
-import { Send, Stethoscope, Pill, Truck, CalendarCheck, ChevronDown, Save, Presentation } from "lucide-react";
+import { Send, Stethoscope, Pill, Truck, CalendarCheck, ChevronDown, Save, Presentation, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   Doctor,
+  DoctorType,
   ProductQuestion,
   VisitType,
   VisibleWhenRule,
@@ -108,6 +109,8 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
   const [focusLieu, setFocusLieu] = useState("");
   const [focusBudget, setFocusBudget] = useState("");
   const [focusAnimateur, setFocusAnimateur] = useState("");
+  const [focusAudienceType, setFocusAudienceType] = useState<DoctorType | "">("");
+  const [focusContacts, setFocusContacts] = useState<Doctor[]>([]);
   const [questions, setQuestions] = useState<ProductQuestionWithProduct[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -139,6 +142,8 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
       setFocusLieu(draft.focusLieu);
       setFocusBudget(draft.focusBudget);
       setFocusAnimateur(draft.focusAnimateur);
+      setFocusAudienceType(draft.focusAudienceType);
+      setFocusContacts(draft.focusContacts);
     }
     setDraftReady(true);
   }, [userId]);
@@ -148,7 +153,7 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
     const draft: VisitDraft = {
       visitType, productId, doctor, objective, compteRendu, engagement,
       grossistes, timings, answers, planNext, nextDeadline, nextNote,
-      focusDoctorCount, focusLieu, focusBudget, focusAnimateur,
+      focusDoctorCount, focusLieu, focusBudget, focusAnimateur, focusAudienceType, focusContacts,
     };
     setDraftSaved(saveVisitDraft(userId, draft));
     const saveOnExit = () => {
@@ -165,7 +170,7 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
     };
   }, [userId, draftReady, visitType, productId, doctor, objective, compteRendu,
     engagement, grossistes, timings, answers, planNext, nextDeadline, nextNote,
-    focusDoctorCount, focusLieu, focusBudget, focusAnimateur]);
+    focusDoctorCount, focusLieu, focusBudget, focusAnimateur, focusAudienceType, focusContacts]);
 
   const switchType = (t: VisitType) => {
     if (t === visitType) return;
@@ -222,7 +227,7 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
     const draft: VisitDraft = {
       visitType, productId, doctor, objective, compteRendu, engagement,
       grossistes, timings, answers, planNext, nextDeadline, nextNote,
-      focusDoctorCount, focusLieu, focusBudget, focusAnimateur,
+      focusDoctorCount, focusLieu, focusBudget, focusAnimateur, focusAudienceType, focusContacts,
     };
     if (!hasVisitDraftContent(draft)) {
       toast.error("Renseignez au moins un élément avant de sauvegarder le brouillon");
@@ -254,8 +259,16 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
       return;
     }
     if (visitType === "focus") {
+      if (!focusAudienceType) {
+        toast.error("Choisissez le public du Focus");
+        return;
+      }
       if (!Number.isInteger(Number(focusDoctorCount)) || Number(focusDoctorCount) <= 0) {
-        toast.error("Indiquez le nombre de médecins présents");
+        toast.error("Indiquez le nombre de participants présents");
+        return;
+      }
+      if (focusContacts.length > Number(focusDoctorCount)) {
+        toast.error("Le nombre de noms sélectionnés dépasse le nombre de participants présents");
         return;
       }
       if (!focusLieu.trim() || !focusAnimateur.trim()) {
@@ -349,6 +362,8 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
         focus_lieu: visitType === "focus" ? focusLieu.trim() : null,
         focus_budget: visitType === "focus" ? Number(focusBudget.trim().replace(",", ".")) : null,
         focus_animateur: visitType === "focus" ? focusAnimateur.trim() : null,
+        focus_audience_type: visitType === "focus" ? focusAudienceType : null,
+        focus_contact_ids: visitType === "focus" ? focusContacts.map((contact) => contact.id) : [],
         answers: answersPayload,
         grossistes: grossistesPayload,
         // Stage timings — médecin visits only.
@@ -426,6 +441,8 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
       setFocusLieu("");
       setFocusBudget("");
       setFocusAnimateur("");
+      setFocusAudienceType("");
+      setFocusContacts([]);
       onSuccess();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
@@ -542,26 +559,68 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
         {/* Focus is a group event, not a doctor-directory contact. */}
         {visitType === "focus" && (
           <Card className="border-primary/20 bg-primary/[0.035]">
-            <CardContent className="grid gap-4 p-4 sm:grid-cols-2">
+            <CardContent className="space-y-5 p-4">
               <div className="space-y-2">
-                <Label htmlFor="focus_doctor_count">Nombre de médecins présents *</Label>
-                <Input id="focus_doctor_count" type="number" min="1" step="1" inputMode="numeric"
-                  value={focusDoctorCount} onChange={(e) => setFocusDoctorCount(e.target.value)} placeholder="Ex. 12" />
+                <Label>Public du Focus *</Label>
+                <div className="grid grid-cols-3 gap-2" role="group" aria-label="Public du Focus">
+                  {(["medecin", "pharmacien", "grossiste"] as const).map((type) => {
+                    const Icon = type === "medecin" ? Stethoscope : type === "pharmacien" ? Pill : Truck;
+                    const label = type === "medecin" ? "Médecins" : type === "pharmacien" ? "Pharmacies" : "Grossistes";
+                    return <button key={type} type="button" aria-pressed={focusAudienceType === type}
+                      onClick={() => {
+                        if (focusAudienceType === type) return;
+                        if (focusContacts.length > 0) toast.info("La liste des participants a été réinitialisée pour ce nouveau public");
+                        setFocusAudienceType(type);
+                        setFocusContacts([]);
+                      }}
+                      className={cn("flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-xs font-semibold transition-colors cursor-pointer sm:flex-row sm:text-sm",
+                        focusAudienceType === type ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground")}
+                    ><Icon className="size-4 shrink-0" />{label}</button>;
+                  })}
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="focus_budget">Budget (DA) *</Label>
-                <Input id="focus_budget" type="text" inputMode="decimal"
-                  value={focusBudget} onChange={(e) => setFocusBudget(e.target.value)} placeholder="Ex. 15000" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="focus_lieu">Lieu *</Label>
-                <Input id="focus_lieu" value={focusLieu} onChange={(e) => setFocusLieu(e.target.value)}
-                  placeholder="Ex. Salle de conférence, Alger" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="focus_animateur">Animateur *</Label>
-                <Input id="focus_animateur" value={focusAnimateur} onChange={(e) => setFocusAnimateur(e.target.value)}
-                  placeholder="Nom de l'animateur" />
+              {focusAudienceType && (
+                <div className="space-y-3 rounded-xl border border-border bg-background p-3 sm:p-4">
+                  <div>
+                    <Label>Participants identifiés <span className="font-normal text-muted-foreground">(facultatif)</span></Label>
+                    <p className="mt-1 text-xs text-muted-foreground">Ajoutez les noms connus ; le nombre total de participants se renseigne séparément.</p>
+                  </div>
+                  {focusContacts.length > 0 && <div className="flex flex-wrap gap-2" aria-label="Participants sélectionnés">
+                    {focusContacts.map((contact) => <span key={contact.id} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 py-1 pl-3 pr-1 text-xs font-medium">
+                      <span className="truncate">{contact.doctor_type === "medecin" ? "Dr. " : ""}{contact.last_name} {contact.first_name}</span>
+                      <button type="button" aria-label={`Retirer ${contact.last_name} ${contact.first_name}`} onClick={() => setFocusContacts((prev) => prev.filter((item) => item.id !== contact.id))}
+                        className="rounded-full p-1 hover:bg-primary/10 cursor-pointer"><X className="size-3.5" /></button>
+                    </span>)}
+                  </div>}
+                  <DoctorSearch type={focusAudienceType} selectedDoctor={null}
+                    onSelect={(contact) => { if (contact && contact.doctor_type === focusAudienceType) setFocusContacts((prev) => prev.some((item) => item.id === contact.id) ? prev : [...prev, contact]); }}
+                    onCreateNew={() => setShowDoctorForm(true)} />
+                  <Button type="button" variant="outline" size="sm" onClick={() => setShowDoctorForm(true)} className="cursor-pointer">
+                    <Plus className="mr-1.5 size-4" />Créer {focusAudienceType === "medecin" ? "un médecin" : focusAudienceType === "pharmacien" ? "une pharmacie" : "un grossiste"}
+                  </Button>
+                </div>
+              )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="focus_doctor_count">Nombre de {focusAudienceType === "pharmacien" ? "pharmaciens" : focusAudienceType === "grossiste" ? "grossistes" : "médecins"} présents *</Label>
+                  <Input id="focus_doctor_count" type="number" min="1" step="1" inputMode="numeric"
+                    value={focusDoctorCount} onChange={(e) => setFocusDoctorCount(e.target.value)} placeholder="Ex. 12" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="focus_budget">Budget (DA) *</Label>
+                  <Input id="focus_budget" type="text" inputMode="decimal"
+                    value={focusBudget} onChange={(e) => setFocusBudget(e.target.value)} placeholder="Ex. 15000" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="focus_lieu">Lieu *</Label>
+                  <Input id="focus_lieu" value={focusLieu} onChange={(e) => setFocusLieu(e.target.value)}
+                    placeholder="Ex. Salle de conférence, Alger" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="focus_animateur">Animateur *</Label>
+                  <Input id="focus_animateur" value={focusAnimateur} onChange={(e) => setFocusAnimateur(e.target.value)}
+                    placeholder="Nom de l'animateur" />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -815,7 +874,9 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
           <DialogHeader>
             <DialogTitle>
               Ajouter un nouveau{" "}
-              {visitType === "pharmacien"
+              {visitType === "focus"
+                ? focusAudienceType === "pharmacien" ? "une pharmacie" : focusAudienceType === "grossiste" ? "un grossiste" : "un médecin"
+                : visitType === "pharmacien"
                 ? "pharmacien"
                 : visitType === "grossiste"
                 ? "grossiste"
@@ -823,9 +884,15 @@ export function VisitForm({ userId, onSuccess, onSaveDraft }: VisitFormProps) {
             </DialogTitle>
           </DialogHeader>
           <DoctorForm
-            defaultType={visitType === "focus" ? "medecin" : visitType}
+            key={visitType === "focus" ? focusAudienceType : visitType}
+            defaultType={visitType === "focus" ? (focusAudienceType || "medecin") : visitType}
+            lockType={visitType === "focus"}
             onSuccess={(newDoctor) => {
-              setDoctor(newDoctor);
+              if (visitType === "focus") {
+                if (newDoctor.doctor_type === focusAudienceType) {
+                  setFocusContacts((prev) => prev.some((item) => item.id === newDoctor.id) ? prev : [...prev, newDoctor]);
+                }
+              } else setDoctor(newDoctor);
               setShowDoctorForm(false);
             }}
             onCancel={() => setShowDoctorForm(false)}

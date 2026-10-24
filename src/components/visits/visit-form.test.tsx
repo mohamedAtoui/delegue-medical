@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, cleanup } from "@testing-library/react";
 import { VisitForm } from "./visit-form";
 import { readVisitDraft, saveVisitDraft, type VisitDraft } from "@/lib/visits/visit-draft";
-import type { Doctor } from "@/types";
+import type { Doctor, DoctorType } from "@/types";
 import { toast } from "sonner";
 
-vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }));
 
 vi.mock("@/components/visits/visit-timer", () => ({
   VisitTimer: ({ value }: { value: unknown[] }) => <div data-testid="timings">{value.length}</div>,
@@ -16,8 +16,10 @@ vi.mock("@/components/visits/doctor-visit-timeline", () => ({
   DoctorVisitTimeline: () => <div />,
 }));
 vi.mock("@/components/doctors/doctor-search", () => ({
-  DoctorSearch: ({ selectedDoctor }: { selectedDoctor: Doctor | null }) => (
-    <div data-testid="selected-doctor">{selectedDoctor?.last_name ?? ""}</div>
+  DoctorSearch: ({ selectedDoctor, type, onSelect }: { selectedDoctor: Doctor | null; type: DoctorType; onSelect: (doctor: Doctor) => void }) => (
+    <div><span data-testid="selected-doctor">{selectedDoctor?.last_name ?? ""}</span>
+      <button type="button" onClick={() => onSelect({ id: "11111111-1111-4111-8111-111111111111", first_name: "Aicha", last_name: "Atoui", doctor_type: type, wilaya: "Alger" } as Doctor)}>Choisir contact test</button>
+    </div>
   ),
 }));
 vi.mock("@/components/doctors/doctor-form", () => ({ DoctorForm: () => <div /> }));
@@ -57,6 +59,8 @@ const draft: VisitDraft = {
   focusLieu: "",
   focusBudget: "",
   focusAnimateur: "",
+  focusAudienceType: "",
+  focusContacts: [],
 };
 
 let originalStorage: PropertyDescriptor | undefined;
@@ -150,6 +154,7 @@ describe("VisitForm draft", () => {
     render(<VisitForm userId="user-1" onSuccess={onSuccess} onSaveDraft={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Focus" })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Focus" }));
+    fireEvent.click(screen.getByRole("button", { name: "Médecins" }));
     fireEvent.change(screen.getByLabelText("Nombre de médecins présents *"), { target: { value: "12" } });
     fireEvent.change(screen.getByLabelText("Lieu *"), { target: { value: "Alger" } });
     fireEvent.change(screen.getByLabelText("Budget (DA) *"), { target: { value: "15000" } });
@@ -157,7 +162,7 @@ describe("VisitForm draft", () => {
     fireEvent.change(screen.getByLabelText("Compte rendu de la visite *"), { target: { value: "Présentation collective" } });
     expect(readVisitDraft("user-1")?.focusLieu).toBe("Alger");
     expect(readVisitDraft("user-1")).toEqual(expect.objectContaining({
-      focusDoctorCount: "12", focusBudget: "15000", focusAnimateur: "Amina", compteRendu: "Présentation collective",
+      focusDoctorCount: "12", focusBudget: "15000", focusAnimateur: "Amina", focusAudienceType: "medecin", compteRendu: "Présentation collective",
     }));
     expect((screen.getByRole("button", { name: "Enregistrer la visite" }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Enregistrer la visite" }));
@@ -167,5 +172,18 @@ describe("VisitForm draft", () => {
     expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/visits", expect.objectContaining({
       body: expect.stringContaining('"focus_doctor_count":12'),
     }));
+  });
+
+  it("keeps Focus participants in the draft and clears them when the audience changes", async () => {
+    render(<VisitForm userId="user-1" onSuccess={vi.fn()} onSaveDraft={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Focus" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Focus" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pharmacies" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choisir contact test" }));
+    await waitFor(() => expect(readVisitDraft("user-1")?.focusContacts).toHaveLength(1));
+    expect(screen.getByText("Atoui Aicha")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Médecins" }));
+    await waitFor(() => expect(readVisitDraft("user-1")?.focusContacts).toHaveLength(0));
+    expect(readVisitDraft("user-1")?.focusAudienceType).toBe("medecin");
   });
 });
