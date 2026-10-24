@@ -21,6 +21,10 @@ export interface VisitDraft {
   planNext: boolean;
   nextDeadline: string;
   nextNote: string;
+  focusDoctorCount: string;
+  focusLieu: string;
+  focusBudget: string;
+  focusAnimateur: string;
 }
 
 type StoredDraft = VisitDraft & { version: number; savedAt: string };
@@ -55,7 +59,11 @@ export function hasVisitDraftContent(draft: VisitDraft): boolean {
     Object.keys(draft.answers).length > 0 ||
     draft.planNext ||
     !!draft.nextDeadline ||
-    !!draft.nextNote
+    !!draft.nextNote ||
+    !!draft.focusDoctorCount ||
+    !!draft.focusLieu ||
+    !!draft.focusBudget ||
+    !!draft.focusAnimateur
   );
 }
 
@@ -68,7 +76,7 @@ export function readVisitDraftRecord(userId: string): VisitDraftRecord | null {
     const draft = JSON.parse(raw) as StoredDraft;
     if (
       draft.version !== DRAFT_VERSION ||
-      !["medecin", "pharmacien", "grossiste"].includes(draft.visitType) ||
+      !["medecin", "pharmacien", "grossiste", "focus"].includes(draft.visitType) ||
       typeof draft.productId !== "string" ||
       typeof draft.objective !== "string" ||
       typeof draft.compteRendu !== "string" ||
@@ -87,7 +95,14 @@ export function readVisitDraftRecord(userId: string): VisitDraftRecord | null {
           typeof draft.doctor.id !== "string" ||
           draft.doctor.doctor_type !== draft.visitType))
     ) return null;
-    return draft;
+    // Older saved drafts predate Focus; preserve them with empty Focus fields.
+    return {
+      ...draft,
+      focusDoctorCount: typeof draft.focusDoctorCount === "string" ? draft.focusDoctorCount : "",
+      focusLieu: typeof draft.focusLieu === "string" ? draft.focusLieu : "",
+      focusBudget: typeof draft.focusBudget === "string" ? draft.focusBudget : "",
+      focusAnimateur: typeof draft.focusAnimateur === "string" ? draft.focusAnimateur : "",
+    };
   } catch {
     return null;
   }

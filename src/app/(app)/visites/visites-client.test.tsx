@@ -36,6 +36,10 @@ const draft: VisitDraft = {
   planNext: false,
   nextDeadline: "",
   nextNote: "",
+  focusDoctorCount: "",
+  focusLieu: "",
+  focusBudget: "",
+  focusAnimateur: "",
 };
 
 let originalStorage: PropertyDescriptor | undefined;
@@ -98,7 +102,7 @@ describe("VisitesClient draft navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Enregistrer comme brouillon" }));
     await waitFor(() => expect(screen.getByText("Brouillon de visite")).toBeTruthy());
     expect(readVisitDraft("user-1")?.objective).toBe("Présenter le produit");
-    fireEvent.click(screen.getByRole("button", { name: "Reprendre", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: /^Reprendre$/ }));
     expect(screen.getByTestId("visit-form")).toBeTruthy();
   });
 });

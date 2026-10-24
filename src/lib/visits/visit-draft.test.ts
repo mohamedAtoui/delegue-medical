@@ -30,6 +30,10 @@ const draft: VisitDraft = {
   planNext: true,
   nextDeadline: "2026-10-10T23:59:59.000Z",
   nextNote: "Revoir les retours",
+  focusDoctorCount: "",
+  focusLieu: "",
+  focusBudget: "",
+  focusAnimateur: "",
 };
 
 beforeEach(() => {
@@ -83,6 +87,21 @@ describe("visit draft persistence", () => {
     }));
   });
 
+  it("restores the full Focus event without a doctor", () => {
+    const focus: VisitDraft = {
+      ...draft,
+      visitType: "focus",
+      doctor: null,
+      productId: "",
+      focusDoctorCount: "12",
+      focusLieu: "Alger",
+      focusBudget: "15000,50",
+      focusAnimateur: "Amina",
+    };
+    saveVisitDraft("user-1", focus);
+    expect(readVisitDraft("user-1")).toEqual(expect.objectContaining(focus));
+  });
+
   it("does not keep an empty visit, and clears only after saving", () => {
     saveVisitDraft("user-1", draft);
     clearVisitDraft("user-1");
@@ -100,6 +119,10 @@ describe("visit draft persistence", () => {
       planNext: false,
       nextDeadline: "",
       nextNote: "",
+      focusDoctorCount: "",
+      focusLieu: "",
+      focusBudget: "",
+      focusAnimateur: "",
     });
     expect(readVisitDraft("user-1")).toBeNull();
   });

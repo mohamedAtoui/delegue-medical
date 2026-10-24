@@ -5,6 +5,7 @@ import { createClient } from "@/utils/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity } from "lucide-react";
 import { DoctorVisitGroup } from "@/components/visits/visit-card";
+import { VisitEntry } from "@/components/visits/visit-entry";
 import { MedicalLoader } from "@/components/ui/medical-loader";
 import type { VisitWithDetails, DoctorType, Potentiel } from "@/types";
 
@@ -66,7 +67,8 @@ export function ActivityFeed({ initialVisits }: ActivityFeedProps = {}) {
   const groups = useMemo(() => {
     const map = new Map<string, DoctorGroup>();
     for (const visit of visits) {
-      const id = visit.doctor_id;
+      if (visit.visit_type === "focus") continue;
+      const id = visit.doctor_id!;
       const isPharm = visit.doctor?.doctor_type === "pharmacien";
       if (!map.has(id)) {
         map.set(id, {
@@ -90,6 +92,12 @@ export function ActivityFeed({ initialVisits }: ActivityFeedProps = {}) {
     );
   }, [visits]);
 
+  const feedItems = [
+    ...groups.map((group) => ({ kind: "doctor" as const, id: group.doctorId, date: group.visits[0].created_at, group })),
+    ...visits.filter((visit) => visit.visit_type === "focus")
+      .map((visit) => ({ kind: "focus" as const, id: visit.id, date: visit.created_at, visit })),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
   return (
     <Card>
       <CardHeader>
@@ -111,18 +119,20 @@ export function ActivityFeed({ initialVisits }: ActivityFeedProps = {}) {
           </p>
         ) : (
           <div className="space-y-3">
-            {groups.map((group) => (
+            {feedItems.map((item) => item.kind === "focus" ? (
+              <VisitEntry key={item.id} visit={item.visit} showDoctor showUser />
+            ) : (
               <DoctorVisitGroup
-                key={group.doctorId}
-                doctorId={group.doctorId}
-                doctorName={group.doctorName}
-                specialty={group.specialty}
-                wilaya={group.wilaya}
-                commune={group.commune}
-                address={group.address}
-                potentiel={group.potentiel}
-                visits={group.visits}
-                doctorType={group.doctorType}
+                key={item.id}
+                doctorId={item.group.doctorId}
+                doctorName={item.group.doctorName}
+                specialty={item.group.specialty}
+                wilaya={item.group.wilaya}
+                commune={item.group.commune}
+                address={item.group.address}
+                potentiel={item.group.potentiel}
+                visits={item.group.visits}
+                doctorType={item.group.doctorType}
                 showUser
               />
             ))}

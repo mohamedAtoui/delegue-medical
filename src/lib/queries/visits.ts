@@ -1,5 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
-import type { VisitWithDetails } from "@/types";
+import type { VisitWithDetails, VisitType } from "@/types";
 
 export interface VisitQueryOptions {
   /** When false, restricts to currentUserId. When true, returns all visits (supervisor view). */
@@ -9,7 +9,7 @@ export interface VisitQueryOptions {
   doctorId?: string | null;
   from?: string | null;
   to?: string | null;
-  type?: "medecin" | "pharmacien" | "grossiste" | null;
+  type?: VisitType | null;
   wilaya?: string | null;
   commune?: string | null;
   search?: string | null;
@@ -51,7 +51,7 @@ export async function fetchVisits(opts: VisitQueryOptions): Promise<VisitsResult
   // so the doctor embed MUST name the direct FK or it errors (PGRST201).
   // Filtering on an embedded doctor column requires an inner join, otherwise
   // PostgREST keeps the visit row with a null doctor instead of excluding it.
-  const needsInnerDoctor = !!wilaya || !!commune || !!search;
+  const needsInnerDoctor = !!wilaya || !!commune || (!!search && type !== "focus");
   const doctorSelect = needsInnerDoctor
     ? "doctor:doctors!visits_doctor_id_fkey!inner(*)"
     : "doctor:doctors!visits_doctor_id_fkey(*)";
@@ -74,16 +74,20 @@ export async function fetchVisits(opts: VisitQueryOptions): Promise<VisitsResult
   if (doctorId) query = query.eq("doctor_id", doctorId);
   if (from) query = query.gte("created_at", from);
   if (to) query = query.lte("created_at", to);
-  if (type === "medecin" || type === "pharmacien" || type === "grossiste") {
+  if (type === "medecin" || type === "pharmacien" || type === "grossiste" || type === "focus") {
     query = query.eq("visit_type", type);
   }
   if (wilaya) query = query.eq("doctor.wilaya", wilaya);
   if (commune) query = query.eq("doctor.commune", commune);
   if (search) {
     const like = `%${search}%`;
-    query = query.or(`last_name.ilike.${like},first_name.ilike.${like}`, {
-      foreignTable: "doctor",
-    });
+    if (type === "focus") {
+      query = query.or(`focus_lieu.ilike.${like},focus_animateur.ilike.${like}`);
+    } else {
+      query = query.or(`last_name.ilike.${like},first_name.ilike.${like}`, {
+        foreignTable: "doctor",
+      });
+    }
   }
 
   const { data, count, error } = await query
@@ -108,15 +112,14 @@ export async function fetchVisits(opts: VisitQueryOptions): Promise<VisitsResult
     // True visit count per doctor — independent of the filtered/paginated page,
     // so the visits list shows how many visits a doctor really has (not the
     // number of comments, and not just the rows on this page).
-    const doctorIds = Array.from(new Set(data.map((v) => v.doctor_id)));
-    const { data: doctorVisits } = await supabase
-      .from("visits")
-      .select("doctor_id")
-      .in("doctor_id", doctorIds);
+    const doctorIds = Array.from(new Set(data.map((v) => v.doctor_id).filter((id): id is string => !!id)));
+    const { data: doctorVisits } = doctorIds.length > 0
+      ? await supabase.from("visits").select("doctor_id").in("doctor_id", doctorIds)
+      : { data: [] };
 
     const visitCounts = new Map<string, number>();
     doctorVisits?.forEach((v) => {
-      visitCounts.set(v.doctor_id, (visitCounts.get(v.doctor_id) || 0) + 1);
+      if (v.doctor_id) visitCounts.set(v.doctor_id, (visitCounts.get(v.doctor_id) || 0) + 1);
     });
 
     data.forEach((v) => {

@@ -5,6 +5,9 @@ import { fireEvent, render, screen, waitFor, cleanup } from "@testing-library/re
 import { VisitForm } from "./visit-form";
 import { readVisitDraft, saveVisitDraft, type VisitDraft } from "@/lib/visits/visit-draft";
 import type { Doctor } from "@/types";
+import { toast } from "sonner";
+
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 vi.mock("@/components/visits/visit-timer", () => ({
   VisitTimer: ({ value }: { value: unknown[] }) => <div data-testid="timings">{value.length}</div>,
@@ -50,6 +53,10 @@ const draft: VisitDraft = {
   planNext: false,
   nextDeadline: "",
   nextNote: "",
+  focusDoctorCount: "",
+  focusLieu: "",
+  focusBudget: "",
+  focusAnimateur: "",
 };
 
 let originalStorage: PropertyDescriptor | undefined;
@@ -136,5 +143,29 @@ describe("VisitForm draft", () => {
     expect(onSuccess).not.toHaveBeenCalled();
     expect(readVisitDraft("user-1")?.objective).toBe("Présenter Synapgen");
     expect(fetchMock).not.toHaveBeenCalledWith("/api/visits", expect.anything());
+  });
+
+  it("submits a Focus without choosing a doctor and preserves its fields in a draft", async () => {
+    const onSuccess = vi.fn();
+    render(<VisitForm userId="user-1" onSuccess={onSuccess} onSaveDraft={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Focus" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Focus" }));
+    fireEvent.change(screen.getByLabelText("Nombre de médecins présents *"), { target: { value: "12" } });
+    fireEvent.change(screen.getByLabelText("Lieu *"), { target: { value: "Alger" } });
+    fireEvent.change(screen.getByLabelText("Budget (DA) *"), { target: { value: "15000" } });
+    fireEvent.change(screen.getByLabelText("Animateur *"), { target: { value: "Amina" } });
+    fireEvent.change(screen.getByLabelText("Compte rendu de la visite *"), { target: { value: "Présentation collective" } });
+    expect(readVisitDraft("user-1")?.focusLieu).toBe("Alger");
+    expect(readVisitDraft("user-1")).toEqual(expect.objectContaining({
+      focusDoctorCount: "12", focusBudget: "15000", focusAnimateur: "Amina", compteRendu: "Présentation collective",
+    }));
+    expect((screen.getByRole("button", { name: "Enregistrer la visite" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer la visite" }));
+    expect(vi.mocked(toast.error)).not.toHaveBeenCalled();
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/visits", expect.anything()));
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/visits", expect.objectContaining({
+      body: expect.stringContaining('"focus_doctor_count":12'),
+    }));
   });
 });

@@ -1,6 +1,6 @@
 export type UserRole = "delegue" | "superviseur";
 export type DoctorType = "medecin" | "pharmacien" | "grossiste";
-export type VisitType = "medecin" | "pharmacien" | "grossiste";
+export type VisitType = "medecin" | "pharmacien" | "grossiste" | "focus";
 export type Potentiel = "A" | "B" | "C";
 
 /** Grossiste supply category on a pharmacy. */
@@ -130,11 +130,15 @@ export interface VisitAnswer {
 export interface Visit {
   id: string;
   user_id: string;
-  doctor_id: string;
+  doctor_id: string | null;
   product_id: string | null;
   visit_type: VisitType;
   objective: string | null;
   compte_rendu: string | null;
+  focus_doctor_count: number | null;
+  focus_lieu: string | null;
+  focus_budget: number | null;
+  focus_animateur: string | null;
   /** Engagement (1–5) captured at this visit; feeds the doctor's average. */
   engagement: number | null;
   // Legacy médecin checklist — kept for pre-migration visits; new visits
@@ -159,7 +163,7 @@ export interface Visit {
 }
 
 export interface VisitWithDetails extends Visit {
-  doctor: Doctor;
+  doctor: Doctor | null;
   user: User;
   comment_count?: number;
   /** True total number of visits for this doctor (not the filtered page). */

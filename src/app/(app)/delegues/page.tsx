@@ -39,14 +39,15 @@ import {
   Save,
   Pencil,
   CalendarCheck,
+  Presentation,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SearchInput } from "@/components/shared/search-input";
 import { FilterTabs } from "@/components/shared/filter-tabs";
-import type { User as UserType, VisitWithDetails, DoctorType, Potentiel } from "@/types";
+import type { User as UserType, VisitWithDetails, DoctorType, VisitType, Potentiel } from "@/types";
 
 type GroupBy = "doctor" | "date" | "wilaya";
-type TypeFilter = "" | DoctorType;
+type TypeFilter = "" | VisitType;
 
 export default function DeleguesPage() {
   const [reps, setReps] = useState<UserType[]>([]);
@@ -100,7 +101,7 @@ export default function DeleguesPage() {
       const repData = await repRes.json();
       const repVisits: VisitWithDetails[] = repData.data || [];
 
-      const doctorIds = [...new Set(repVisits.map((v) => v.doctor_id))];
+      const doctorIds = [...new Set(repVisits.map((v) => v.doctor_id).filter((id): id is string => !!id))];
 
       if (doctorIds.length > 0) {
         const allPromises = doctorIds.map((id) =>
@@ -111,6 +112,7 @@ export default function DeleguesPage() {
 
         const visitMap = new Map<string, VisitWithDetails>();
         for (const v of allVisits) visitMap.set(v.id, v);
+        for (const v of repVisits.filter((visit) => visit.visit_type === "focus")) visitMap.set(v.id, v);
         setVisits(
           Array.from(visitMap.values()).sort(
             (a, b) =>
@@ -118,7 +120,7 @@ export default function DeleguesPage() {
           )
         );
       } else {
-        setVisits([]);
+        setVisits(repVisits.filter((visit) => visit.visit_type === "focus"));
       }
     } finally {
       setLoadingVisits(false);
@@ -166,12 +168,15 @@ export default function DeleguesPage() {
       repVisits = repVisits.filter(
         (v) =>
           v.doctor?.first_name?.toLowerCase().includes(s) ||
-          v.doctor?.last_name?.toLowerCase().includes(s)
+          v.doctor?.last_name?.toLowerCase().includes(s) ||
+          v.focus_lieu?.toLowerCase().includes(s) ||
+          v.focus_animateur?.toLowerCase().includes(s)
       );
     }
 
-    const matchedDoctorIds = new Set(repVisits.map((v) => v.doctor_id));
-    return visits.filter((v) => matchedDoctorIds.has(v.doctor_id));
+    const matchedDoctorIds = new Set(repVisits.map((v) => v.doctor_id).filter(Boolean));
+    const matchedFocusIds = new Set(repVisits.filter((v) => v.visit_type === "focus").map((v) => v.id));
+    return visits.filter((v) => v.doctor_id ? matchedDoctorIds.has(v.doctor_id) : matchedFocusIds.has(v.id));
   }, [visits, dateRange, searchDoctor, selectedRep, typeFilter]);
 
   // Group visits
@@ -192,7 +197,8 @@ export default function DeleguesPage() {
         }
       >();
       for (const v of filteredVisits) {
-        const id = v.doctor_id;
+        if (v.visit_type === "focus") continue;
+        const id = v.doctor_id!;
         const isPharm = v.doctor?.doctor_type === "pharmacien";
         if (!map.has(id)) {
           map.set(id, {
@@ -209,7 +215,7 @@ export default function DeleguesPage() {
         }
         map.get(id)!.visits.push(v);
       }
-      return { type: "doctor" as const, groups: Array.from(map.values()) };
+      return { type: "doctor" as const, groups: Array.from(map.values()), focusVisits: filteredVisits.filter((v) => v.visit_type === "focus") };
     }
 
     if (groupBy === "date") {
@@ -242,7 +248,7 @@ export default function DeleguesPage() {
     const repOnly = selectedRep
       ? filteredVisits.filter((v) => v.user_id === selectedRep.id)
       : filteredVisits;
-    const uniqueDoctors = new Set(repOnly.map((v) => v.doctor_id)).size;
+    const uniqueDoctors = new Set(repOnly.map((v) => v.doctor_id).filter(Boolean)).size;
     const lastActivity = repOnly[0]?.created_at;
     const medecinCount = repOnly.filter(
       (v) => (v.doctor?.doctor_type || v.visit_type) === "medecin"
@@ -712,6 +718,7 @@ export default function DeleguesPage() {
                   { value: "", label: "Toutes", icon: Users },
                   { value: "medecin", label: "Médecins", icon: Stethoscope },
                   { value: "pharmacien", label: "Pharmaciens", icon: Pill },
+                  { value: "focus", label: "Focus", icon: Presentation },
                 ]}
               />
 
@@ -752,7 +759,7 @@ export default function DeleguesPage() {
                 <SearchInput
                   value={searchDoctor}
                   onChange={setSearchDoctor}
-                  placeholder="Chercher un médecin/pharmacien..."
+                  placeholder={typeFilter === "focus" ? "Chercher un lieu ou un animateur..." : "Chercher un contact..."}
                   className="flex-1"
                 />
               </div>
@@ -771,6 +778,9 @@ export default function DeleguesPage() {
                 </div>
               ) : groupedContent.type === "doctor" ? (
                 <div className="space-y-3">
+                  {groupedContent.focusVisits.map((visit) => (
+                    <VisitEntry key={visit.id} visit={visit} showDoctor showUser highlightUserId={selectedRep?.id} />
+                  ))}
                   {groupedContent.groups.map((group) => (
                     <DoctorVisitGroup
                       key={group.doctorId}
@@ -813,6 +823,7 @@ export default function DeleguesPage() {
                           <VisitEntry
                             key={v.id}
                             visit={v}
+                            showDoctor
                             showUser
                             highlightUserId={selectedRep?.id}
                           />

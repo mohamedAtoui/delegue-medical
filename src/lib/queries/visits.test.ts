@@ -76,3 +76,13 @@ describe("fetchVisits commune filter", () => {
     expect(eqCalls.find(([col]) => col === "doctor.commune")).toBeUndefined();
   });
 });
+
+describe("fetchVisits Focus filter", () => {
+  it("keeps the doctor join optional and filters Focus events by type", async () => {
+    const { fetchVisits } = await import("./visits");
+    await fetchVisits({ all: true, type: "focus", search: "Alger", page: 1, limit: 20 });
+    const mainSelect = selectCalls.find((s) => s.includes("doctor:doctors"));
+    expect(mainSelect).toContain("doctor:doctors!visits_doctor_id_fkey(*)");
+    expect(eqCalls).toContainEqual(["visit_type", "focus"]);
+  });
+});
